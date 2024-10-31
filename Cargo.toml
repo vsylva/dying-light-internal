@@ -15,7 +15,7 @@ hudhook = { git = "https://github.com/veeenu/hudhook.git", rev = "9c78aa5", defa
 ] }
 
 [patch."https://github.com/veeenu/hudhook.git"]
-hudhook = { path = "../hudhook" }
+hudhook = { path = "vendor/hudhook" }
 
 [build-dependencies]
 forward-dll = "0.1.16"
