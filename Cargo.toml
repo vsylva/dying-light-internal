@@ -9,13 +9,11 @@ name = "hid"
 crate-type = ["cdylib"]
 
 [dependencies]
-libmem = "5.0.1"
-hudhook = { git = "https://github.com/veeenu/hudhook.git", rev = "9c78aa5", default-features = false, features = [
+libmem = { version = "5.0.1", default-features = false }
+hudhook = { path = "vendor/hudhook", default-features = false, features = [
     "dx11",
 ] }
 
-[patch."https://github.com/veeenu/hudhook.git"]
-hudhook = { path = "vendor/hudhook" }
 
 [build-dependencies]
 forward-dll = "0.1.16"
