@@ -14,7 +14,6 @@ hudhook = { path = "vendor/hudhook", default-features = false, features = [
     "dx11",
 ] }
 
-
 [build-dependencies]
 forward-dll = "0.1.16"
 
