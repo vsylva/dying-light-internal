@@ -100,7 +100,7 @@ unsafe extern "system" fn dx9_present_impl(
         .get()
         .expect("DirectX 9 trampolines uninitialized");
 
-    if let Err(_) = render(&device) {}
+    render(&device).unwrap_or_default();
 
     dx9_present(
         device,

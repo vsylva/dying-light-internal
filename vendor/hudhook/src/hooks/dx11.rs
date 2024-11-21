@@ -92,7 +92,7 @@ unsafe extern "system" fn dxgi_swap_chain_present_impl(
         .get()
         .expect("DirectX 11 trampolines uninitialized");
 
-    if let Err(_) = render(&swap_chain) {}
+    render(&swap_chain).unwrap_or_default();
 
     dxgi_swap_chain_present(swap_chain, sync_interval, flags)
 }

@@ -113,9 +113,7 @@
 //!         .unwrap();
 //! }
 //! ```
-#![allow(clippy::needless_doctest_main)]
 #![allow(static_mut_refs)]
-#![deny(missing_docs)]
 
 use std::{
     sync::atomic::{AtomicBool, Ordering},
@@ -225,10 +223,10 @@ pub fn free_console() -> Result<(), Error> {
 /// dropping/resetting the contents of static mutable variables).
 pub fn eject() {
     thread::spawn(|| unsafe {
-        if let Err(_) = free_console() {}
+        free_console().unwrap_or_default();
 
         if let Some(mut hudhook) = HUDHOOK.take() {
-            if let Err(_) = hudhook.unapply() {}
+            hudhook.unapply().unwrap_or_default();
         }
 
         if let Some(module) = MODULE.take() {
@@ -243,7 +241,7 @@ pub trait ImguiRenderLoop {
     /// initialize your data.
     /// `ctx` is the imgui context, and `render_context` is meant to access
     /// hudhook renderers' extensions such as texture management.
-    fn initialize<'a>(
+    unsafe fn initialize<'a>(
         &'a mut self,
         _ctx: &mut Context,
         _render_context: &'a mut dyn RenderContext,
@@ -254,7 +252,7 @@ pub trait ImguiRenderLoop {
     /// modify imgui settings before rendering the UI.
     /// `ctx` is the imgui context, and `render_context` is meant to access
     /// hudhook renderers' extensions such as texture management.
-    fn before_render<'a>(
+    unsafe fn before_render<'a>(
         &'a mut self,
         _ctx: &mut Context,
         _render_context: &'a mut dyn RenderContext,
@@ -262,14 +260,14 @@ pub trait ImguiRenderLoop {
     }
 
     /// Called every frame. Use the provided `ui` object to build your UI.
-    fn render(&mut self, ui: &mut Ui);
+    unsafe fn render(&mut self, ui: &mut Ui);
 
     /// Called during the window procedure.
-    fn on_wnd_proc(&self, _hwnd: HWND, _umsg: u32, _wparam: WPARAM, _lparam: LPARAM) {}
+    unsafe fn on_wnd_proc(&self, _hwnd: HWND, _umsg: u32, _wparam: WPARAM, _lparam: LPARAM) {}
 
     /// Returns the types of window message that
     /// you do not want to propagate to the main window
-    fn message_filter(&self, _io: &Io) -> MessageFilter {
+    unsafe fn message_filter(&self, _io: &Io) -> MessageFilter {
         MessageFilter::empty()
     }
 }
@@ -422,4 +420,57 @@ impl HudhookBuilder {
     pub fn build(self) -> Hudhook {
         self.0
     }
+}
+
+/// Entry point generator for the library.
+///
+/// After implementing your [render loop](crate::hooks) of choice, invoke
+/// the macro to generate the `DllMain` function that will serve as entry point
+/// for your hook.
+///
+/// Example usage:
+/// ```no_run
+/// use hudhook::{
+///     hooks::{ImguiRenderLoop, dx12::ImguiDx12Hooks},
+///     *,
+/// };
+///
+/// pub struct MyRenderLoop;
+///
+/// impl ImguiRenderLoop for MyRenderLoop {
+///     fn render(&mut self, frame: &mut imgui::Ui) {
+///         // ...
+///     }
+/// }
+///
+/// hudhook::hudhook!(MyRenderLoop.into_hook::<ImguiDx12Hooks>());
+/// ```
+#[macro_export]
+macro_rules! hudhook {
+    ($t:ty, $hooks:expr) => {
+        /// Entry point created by the `hudhook` library.
+        #[no_mangle]
+        pub unsafe extern "stdcall" fn DllMain(
+            hmodule: ::hudhook::windows::Win32::Foundation::HINSTANCE,
+            reason: u32,
+            _: *mut ::std::ffi::c_void,
+        ) {
+            use ::hudhook::*;
+
+            if reason == ::hudhook::windows::Win32::System::SystemServices::DLL_PROCESS_ATTACH {
+                ::hudhook::tracing::trace!("DllMain()");
+                ::std::thread::spawn(move || {
+                    if let Err(e) = ::hudhook::Hudhook::builder()
+                        .with::<$t>({ $hooks })
+                        .with_hmodule(hmodule)
+                        .build()
+                        .apply()
+                    {
+                        ::hudhook::tracing::error!("Couldn't apply hooks: {e:?}");
+                        ::hudhook::eject();
+                    }
+                });
+            }
+        }
+    };
 }

@@ -72,7 +72,7 @@ impl<T: RenderEngine> Pipeline<T> {
 
         ctx.io_mut().display_size = [width as f32, height as f32];
 
-        render_loop.initialize(&mut ctx, &mut engine);
+        unsafe { render_loop.initialize(&mut ctx, &mut engine) };
 
         if let Err(e) = engine.setup_fonts(&mut ctx) {
             return Err((e, render_loop));
@@ -129,7 +129,7 @@ impl<T: RenderEngine> Pipeline<T> {
             .set(queue_buffer)
             .expect("OnceCell should be empty");
 
-        let message_filter = self.render_loop.message_filter(self.ctx.io());
+        let message_filter = unsafe { self.render_loop.message_filter(self.ctx.io()) };
 
         self.shared_state
             .message_filter
@@ -140,8 +140,10 @@ impl<T: RenderEngine> Pipeline<T> {
         io.nav_active = true;
         io.nav_visible = true;
 
-        self.render_loop
-            .before_render(&mut self.ctx, &mut self.engine);
+        unsafe {
+            self.render_loop
+                .before_render(&mut self.ctx, &mut self.engine)
+        };
 
         Ok(())
     }
@@ -163,7 +165,7 @@ impl<T: RenderEngine> Pipeline<T> {
         }
 
         let ui = self.ctx.frame();
-        self.render_loop.render(ui);
+        unsafe { self.render_loop.render(ui) };
         let draw_data = self.ctx.render();
 
         self.engine.render(draw_data, render_target)?;
@@ -217,11 +219,10 @@ unsafe extern "system" fn pipeline_wnd_proc(
         Arc::clone(shared_state)
     };
 
-    if let Err(_) = shared_state
+    shared_state
         .tx
         .send(PipelineMessage(hwnd, msg, wparam, lparam))
-    {}
-
+        .unwrap_or_default();
     // CONCURRENCY: as the message interpretation now happens out of band, this
     // expresses the intent as of *before* the current message was received.
     let message_filter =

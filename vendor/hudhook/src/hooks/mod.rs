@@ -84,7 +84,6 @@ impl DummyHwnd {
             lpszClassName: w!("HUDHOOK"),
             ..Default::default()
         };
-
         unsafe { RegisterClassExW(&wndclass) };
 
         // Create the window.
@@ -118,8 +117,8 @@ impl Drop for DummyHwnd {
     fn drop(&mut self) {
         // Destroy the window and unregister the class.
         unsafe {
-            if let Err(_) = DestroyWindow(self.0) {}
-            if let Err(_) = UnregisterClassW(self.1.lpszClassName, self.1.hInstance) {}
+            DestroyWindow(self.0).unwrap_or_default();
+            UnregisterClassW(self.1.lpszClassName, self.1.hInstance).unwrap_or_default();
         }
     }
 }

@@ -74,8 +74,7 @@ unsafe extern "system" fn opengl32_wgl_swap_buffers_impl(dc: HDC) {
         .get()
         .expect("OpenGL3 trampolines uninitialized");
 
-    if let Err(_) = render(dc) {}
-
+    render(dc).unwrap_or_default();
     opengl32_wgl_swap_buffers(dc);
 }
 
