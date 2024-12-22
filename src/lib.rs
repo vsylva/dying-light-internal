@@ -77,15 +77,15 @@ struct Ui {
 }
 
 struct Dip {
-    c_game_p: *const CGame,
+    game_p: *const CGame,
     game_di_p: *const GameDI,
     session_cooperative_di_p: *const SessionCooperativeDI,
     level_di_p: *const LevelDI,
-    c_level_p: *const CLevel,
-    c_model_obj_p_array: Array<*const CModelObject>,
+    level_p: *const CLevel,
+    model_obj_p_array: Array<*const CModelObject>,
     local_client_di_p: *const LocalClientDI,
     player_di_p: *mut PlayerDI,
-    player_c_model_obj_p: *const CModelObject,
+    player_model_obj_p: *const CModelObject,
     camera_manage_p: *const CameraManagerDI,
     camera_fpp_di_p: *const CameraFPPDI,
     player_pos_x_p: *mut f32,
@@ -146,7 +146,7 @@ struct Vec2Float {
 
 #[derive(Clone, Copy, Default)]
 #[repr(C)]
-struct Vec3Float {
+struct Vec3F {
     x: f32,
     y: f32,
     z: f32,
@@ -324,28 +324,28 @@ unsafe impl Sync for Ui {}
 impl hudhook::ImguiRenderLoop for Ui {
     unsafe fn initialize<'a>(
         &'a mut self,
-        _ctx: &mut hudhook::imgui::Context,
-        _render_context: &'a mut dyn hudhook::RenderContext,
+        ctx: &mut hudhook::imgui::Context,
+        _: &'a mut dyn hudhook::RenderContext,
     ) {
         self.game_window = FindWindowA(hudhook::windows::core::s!("techland_game_class"), None);
 
         ImFontAtlas_AddFontFromFileTTF(
-            _ctx.fonts().raw_mut(),
+            ctx.fonts().raw_mut(),
             "C:\\windows\\fonts\\simhei.ttf\0".as_ptr().cast(),
             22.0,
             std::ptr::null(),
-            ImFontAtlas_GetGlyphRangesChineseFull(_ctx.fonts().raw_mut()),
+            ImFontAtlas_GetGlyphRangesChineseFull(ctx.fonts().raw_mut()),
         );
 
-        _ctx.style_mut().use_light_colors();
+        ctx.style_mut().use_light_colors();
 
-        _ctx.set_ini_filename(None);
+        ctx.set_ini_filename(None);
     }
 
     unsafe fn before_render<'a>(
         &'a mut self,
-        _ctx: &mut hudhook::imgui::Context,
-        _render_context: &'a mut dyn hudhook::RenderContext,
+        ctx: &mut hudhook::imgui::Context,
+        _: &'a mut dyn hudhook::RenderContext,
     ) {
         static mut IS_KEY_OPEN_MENU_DOWN: bool = false;
 
@@ -359,7 +359,7 @@ impl hudhook::ImguiRenderLoop for Ui {
         }
 
         if !self.is_menu_on {
-            _ctx.io_mut().mouse_draw_cursor = false;
+            ctx.io_mut().mouse_draw_cursor = false;
             return;
         }
 
@@ -372,25 +372,25 @@ impl hudhook::ImguiRenderLoop for Ui {
         let _ = GetCursorPos(&mut mouse_pos);
         let _ = ScreenToClient(self.game_window, &mut mouse_pos);
 
-        _ctx.io_mut().mouse_draw_cursor = true;
-        _ctx.io_mut().mouse_pos[0] = mouse_pos.x as f32;
-        _ctx.io_mut().mouse_pos[1] = mouse_pos.y as f32;
+        ctx.io_mut().mouse_draw_cursor = true;
+        ctx.io_mut().mouse_pos[0] = mouse_pos.x as f32;
+        ctx.io_mut().mouse_pos[1] = mouse_pos.y as f32;
 
         static mut IS_MOUSE_LEFT_DOWN: bool = false;
 
         if GetAsyncKeyState(0x1) & 0x8000u16 as i16 != 0 {
             IS_MOUSE_LEFT_DOWN = true;
 
-            _ctx.io_mut().mouse_down[0] = true;
+            ctx.io_mut().mouse_down[0] = true;
         } else {
             IS_MOUSE_LEFT_DOWN = false;
 
-            _ctx.io_mut().mouse_down[0] = false;
+            ctx.io_mut().mouse_down[0] = false;
         }
     }
 
     unsafe fn render(&mut self, ui: &mut hudhook::imgui::Ui) {
-        let dip = match get_dip() {
+        let dip = match get_world() {
             Some(val) => val,
             None => return,
         };
@@ -399,10 +399,9 @@ impl hudhook::ImguiRenderLoop for Ui {
             self.draw_aim_fov(ui, &dip);
         }
 
-        for index in 0..dip.c_model_obj_p_array.len {
-            let c_model_obj_pp = dip.c_model_obj_p_array.ptr.add(index as usize);
-
-            if c_model_obj_pp.is_bad_read_ptr(0x8) {
+        for index in 0..dip.model_obj_p_array.len {
+            let c_model_obj_pp = dip.model_obj_p_array.ptr.add(index as usize);
+            if c_model_obj_pp.is_bad_read_ptr(size_of::<*const *const CModelObject>()) {
                 continue;
             }
 
@@ -411,7 +410,7 @@ impl hudhook::ImguiRenderLoop for Ui {
                 None => continue,
             };
 
-            if obj.c_model_obj_p == dip.player_c_model_obj_p {
+            if obj.c_model_obj_p == dip.player_model_obj_p {
                 continue;
             }
 
@@ -463,7 +462,7 @@ impl hudhook::ImguiRenderLoop for Ui {
             //     self.selected_bone as u8,
             // );
 
-            let mut world_pos: Vec3Float = Vec3Float::default();
+            let mut world_pos: Vec3F = Vec3F::default();
             get_world_position(obj.model_obj_p, &mut world_pos);
 
             if is_in_frustum(dip.camera_fpp_di_p, &mut world_pos) == 0 {
@@ -551,199 +550,204 @@ impl Ui {
     ];
 
     unsafe fn tab_item_filter(&mut self, ui: &hudhook::imgui::Ui) {
-        if let Some(item) = ui.tab_item("过滤") {
-            // ZombieNormal
-            ui.checkbox(
-                "丧尸(普通)##switch_filter_zombie_normal",
-                &mut self.switch_filter_zombie_normal,
-            );
-            ui.same_line();
-            ui.color_edit4_config("##color_zombie_normal", &mut self.color_zombie_normal)
-                .inputs(false)
-                .build();
+        let Some(item) = ui.tab_item("过滤") else {
+            return;
+        };
 
-            // ZombieSpecial
-            ui.checkbox(
-                "丧尸(特殊)##switch_filter_zombie_special",
-                &mut self.switch_filter_zombie_special,
-            );
-            ui.same_line();
-            ui.color_edit4_config("##color_zombie_special", &mut self.color_zombie_special)
-                .inputs(false)
-                .build();
-
-            // ZombieHunter
-            ui.checkbox(
-                "丧尸(猎手)##switch_filter_zombie_hunter",
-                &mut self.switch_filter_zombie_hunter,
-            );
-            ui.same_line();
-            ui.color_edit4_config("##color_zombie_hunter", &mut self.color_zombie_hunter)
-                .inputs(false)
-                .build();
-
-            // SurvivorNormal
-            ui.checkbox(
-                "幸存者(普通)##switch_filter_survivor_normal",
-                &mut self.switch_filter_survivor_normal,
-            );
-            ui.same_line();
-            ui.color_edit4_config("##color_survivor_nomal", &mut self.color_survivor_nomal)
-                .inputs(false)
-                .build();
-
-            // SurvivorSpecial
-            ui.checkbox(
-                "幸存者(特殊)##switch_filter_survivor_special,",
-                &mut self.switch_filter_survivor_special,
-            );
-            ui.same_line();
-            ui.color_edit4_config("##color_survivor_special", &mut self.color_survivor_special)
-                .inputs(false)
-                .build();
-
-            // SurvivorShopkeeper
-            ui.checkbox(
-                "幸存者(商人)##switch_filter_survivor_shopkeeper",
-                &mut self.switch_filter_survivor_shopkeeper,
-            );
-            ui.same_line();
-            ui.color_edit4_config(
-                "##color_survivor_shopkeeper",
-                &mut self.color_survivor_shopkeeper,
-            )
+        // ZombieNormal
+        ui.checkbox(
+            "丧尸(普通)##switch_filter_zombie_normal",
+            &mut self.switch_filter_zombie_normal,
+        );
+        ui.same_line();
+        ui.color_edit4_config("##color_zombie_normal", &mut self.color_zombie_normal)
             .inputs(false)
             .build();
 
-            // PlayerHuman
-            ui.checkbox(
-                "玩家(人类)##switch_filter_player_human",
-                &mut self.switch_filter_player_human,
-            );
-            ui.same_line();
-            ui.color_edit4_config("##color_player_human", &mut self.color_player_human)
-                .inputs(false)
-                .build();
+        // ZombieSpecial
+        ui.checkbox(
+            "丧尸(特殊)##switch_filter_zombie_special",
+            &mut self.switch_filter_zombie_special,
+        );
+        ui.same_line();
+        ui.color_edit4_config("##color_zombie_special", &mut self.color_zombie_special)
+            .inputs(false)
+            .build();
 
-            // PlayerHunter
-            ui.checkbox(
-                "玩家(猎手)##switch_filter_player_hunter",
-                &mut self.switch_filter_player_hunter,
-            );
-            ui.same_line();
-            ui.color_edit4_config("##color_player_hunter", &mut self.color_player_hunter)
-                .inputs(false)
-                .build();
+        // ZombieHunter
+        ui.checkbox(
+            "丧尸(猎手)##switch_filter_zombie_hunter",
+            &mut self.switch_filter_zombie_hunter,
+        );
+        ui.same_line();
+        ui.color_edit4_config("##color_zombie_hunter", &mut self.color_zombie_hunter)
+            .inputs(false)
+            .build();
 
-            // Other
-            ui.checkbox(
-                "其他(调试)##witch_filter_other",
-                &mut self.switch_filter_other,
-            );
-            ui.same_line();
-            ui.color_edit4_config("##color_other", &mut self.color_other)
-                .inputs(false)
-                .build();
+        // SurvivorNormal
+        ui.checkbox(
+            "幸存者(普通)##switch_filter_survivor_normal",
+            &mut self.switch_filter_survivor_normal,
+        );
+        ui.same_line();
+        ui.color_edit4_config("##color_survivor_nomal", &mut self.color_survivor_nomal)
+            .inputs(false)
+            .build();
 
-            item.end();
-        }
+        // SurvivorSpecial
+        ui.checkbox(
+            "幸存者(特殊)##switch_filter_survivor_special,",
+            &mut self.switch_filter_survivor_special,
+        );
+        ui.same_line();
+        ui.color_edit4_config("##color_survivor_special", &mut self.color_survivor_special)
+            .inputs(false)
+            .build();
+
+        // SurvivorShopkeeper
+        ui.checkbox(
+            "幸存者(商人)##switch_filter_survivor_shopkeeper",
+            &mut self.switch_filter_survivor_shopkeeper,
+        );
+        ui.same_line();
+        ui.color_edit4_config(
+            "##color_survivor_shopkeeper",
+            &mut self.color_survivor_shopkeeper,
+        )
+        .inputs(false)
+        .build();
+
+        // PlayerHuman
+        ui.checkbox(
+            "玩家(人类)##switch_filter_player_human",
+            &mut self.switch_filter_player_human,
+        );
+        ui.same_line();
+        ui.color_edit4_config("##color_player_human", &mut self.color_player_human)
+            .inputs(false)
+            .build();
+
+        // PlayerHunter
+        ui.checkbox(
+            "玩家(猎手)##switch_filter_player_hunter",
+            &mut self.switch_filter_player_hunter,
+        );
+        ui.same_line();
+        ui.color_edit4_config("##color_player_hunter", &mut self.color_player_hunter)
+            .inputs(false)
+            .build();
+
+        // Other
+        ui.checkbox(
+            "其他(调试)##witch_filter_other",
+            &mut self.switch_filter_other,
+        );
+        ui.same_line();
+        ui.color_edit4_config("##color_other", &mut self.color_other)
+            .inputs(false)
+            .build();
+
+        item.end();
     }
 
     unsafe fn tab_item_draw(&mut self, ui: &hudhook::imgui::Ui) {
-        if let Some(item) = ui.tab_item("绘制") {
-            ui.checkbox("名字", &mut self.switch_draw_model_type);
+        let Some(item) = ui.tab_item("绘制") else {
+            return;
+        };
+        ui.checkbox("名字", &mut self.switch_draw_model_type);
 
-            ui.checkbox("骨骼", &mut self.switch_draw_bones);
+        ui.checkbox("骨骼", &mut self.switch_draw_bones);
 
-            ui.checkbox("距离", &mut self.switch_draw_distance);
+        ui.checkbox("距离", &mut self.switch_draw_distance);
 
-            ui.checkbox("可视线", &mut self.switch_draw_visible_line);
+        ui.checkbox("可视线", &mut self.switch_draw_visible_line);
 
-            ui.checkbox("类型", &mut self.switch_draw_type_data);
+        ui.checkbox("类型", &mut self.switch_draw_type_data);
 
-            ui.checkbox("标志", &mut self.switch_draw_logo);
+        ui.checkbox("标志", &mut self.switch_draw_logo);
 
-            item.end();
-        }
+        item.end();
     }
 
     unsafe fn tab_item_aim(&mut self, ui: &hudhook::imgui::Ui) {
-        if let Some(item) = ui.tab_item("自瞄") {
-            ui.checkbox("开启##switch_aim", &mut self.switch_aim);
+        let Some(item) = ui.tab_item("自瞄") else {
+            return;
+        };
 
-            if let Some(cb) =
-                ui.begin_combo("按键##aim_selected_key", self.aim_selected_key.to_string())
-            {
-                for current in self.switch_aim_key_list.as_slice() {
-                    if self.aim_selected_key == *current {
-                        ui.set_item_default_focus();
-                    }
+        ui.checkbox("开启##switch_aim", &mut self.switch_aim);
 
-                    if ui
-                        .selectable_config(current.to_string())
-                        .selected(self.aim_selected_key == *current)
-                        .build()
-                    {
-                        self.aim_selected_key = *current;
-                        self.aim.aim_vk_code = self.aim_selected_key as i32;
-                    }
+        if let Some(cb) =
+            ui.begin_combo("按键##aim_selected_key", self.aim_selected_key.to_string())
+        {
+            for current in self.switch_aim_key_list.as_slice() {
+                if self.aim_selected_key == *current {
+                    ui.set_item_default_focus();
                 }
-                cb.end();
-            }
 
-            if let Some(cb) = ui.begin_combo("部位", self.selected_bone.to_string()) {
-                for current in self.bone_list.as_slice() {
-                    if self.selected_bone == *current {
-                        ui.set_item_default_focus();
-                    }
-
-                    if ui
-                        .selectable_config(current.to_string())
-                        .selected(self.selected_bone == *current)
-                        .build()
-                    {
-                        self.selected_bone = *current;
-                    }
+                if ui
+                    .selectable_config(current.to_string())
+                    .selected(self.aim_selected_key == *current)
+                    .build()
+                {
+                    self.aim_selected_key = *current;
+                    self.aim.aim_vk_code = self.aim_selected_key as i32;
                 }
-                cb.end();
             }
-
-            ui.checkbox("FOV##switch_aim_fov", &mut self.switch_draw_aim_fov);
-            ui.same_line();
-            ui.slider("##aim_fov", 50.0, 500.0, &mut self.aim_fov);
-
-            ui.checkbox(
-                "丧尸(普通)##switch_aim_filter_zombie_normal",
-                &mut self.aim.switch_aim_filter_zombie_normal,
-            );
-
-            ui.checkbox(
-                "丧尸(特殊)##switch_aim_filter_zombie_special",
-                &mut self.aim.switch_aim_filter_zombie_special,
-            );
-
-            ui.checkbox(
-                "丧尸(猎手)##switch_aim_filter_survivor_special",
-                &mut self.aim.switch_aim_filter_zombie_hunter,
-            );
-
-            ui.checkbox(
-                "幸存者(特殊)##switch_aim_filter_survivor_special",
-                &mut self.aim.switch_aim_filter_survivor_special,
-            );
-
-            ui.checkbox(
-                "玩家(人类)##switch_aim_filter_player_human",
-                &mut self.aim.switch_aim_filter_player_human,
-            );
-
-            ui.checkbox(
-                "玩家(猎手)##switch_aim_filter_player_hunter",
-                &mut self.aim.switch_aim_filter_player_hunter,
-            );
-
-            item.end();
+            cb.end();
         }
+
+        if let Some(cb) = ui.begin_combo("部位", self.selected_bone.to_string()) {
+            for current in self.bone_list.as_slice() {
+                if self.selected_bone == *current {
+                    ui.set_item_default_focus();
+                }
+
+                if ui
+                    .selectable_config(current.to_string())
+                    .selected(self.selected_bone == *current)
+                    .build()
+                {
+                    self.selected_bone = *current;
+                }
+            }
+            cb.end();
+        }
+
+        ui.checkbox("FOV##switch_aim_fov", &mut self.switch_draw_aim_fov);
+        ui.same_line();
+        ui.slider("##aim_fov", 50.0, 500.0, &mut self.aim_fov);
+
+        ui.checkbox(
+            "丧尸(普通)##switch_aim_filter_zombie_normal",
+            &mut self.aim.switch_aim_filter_zombie_normal,
+        );
+
+        ui.checkbox(
+            "丧尸(特殊)##switch_aim_filter_zombie_special",
+            &mut self.aim.switch_aim_filter_zombie_special,
+        );
+
+        ui.checkbox(
+            "丧尸(猎手)##switch_aim_filter_survivor_special",
+            &mut self.aim.switch_aim_filter_zombie_hunter,
+        );
+
+        ui.checkbox(
+            "幸存者(特殊)##switch_aim_filter_survivor_special",
+            &mut self.aim.switch_aim_filter_survivor_special,
+        );
+
+        ui.checkbox(
+            "玩家(人类)##switch_aim_filter_player_human",
+            &mut self.aim.switch_aim_filter_player_human,
+        );
+
+        ui.checkbox(
+            "玩家(猎手)##switch_aim_filter_player_hunter",
+            &mut self.aim.switch_aim_filter_player_hunter,
+        );
+
+        item.end();
     }
 
     #[inline(always)]
@@ -753,7 +757,7 @@ impl Ui {
         dip: &Dip,
         obj: &Obj,
         color: [f32; 4],
-        world_pos: &Vec3Float,
+        world_pos: &Vec3F,
     ) {
         let mut screen_pos: Vec2Float = Vec2Float::default();
 
@@ -768,13 +772,13 @@ impl Ui {
 
     #[inline(always)]
     unsafe fn draw_bones(&self, ui: &hudhook::imgui::Ui, dip: &Dip, obj: &Obj, color: [f32; 4]) {
-        let mut previous_world_pos: Vec3Float = Vec3Float {
+        let mut previous_world_pos: Vec3F = Vec3F {
             x: 0.0,
             y: 0.0,
             z: 0.0,
         };
 
-        let mut current_world_pos: Vec3Float = Vec3Float {
+        let mut current_world_pos: Vec3F = Vec3F {
             x: 0.0,
             y: 0.0,
             z: 0.0,
@@ -836,7 +840,7 @@ impl Ui {
     unsafe fn draw_distance(&self, ui: &hudhook::imgui::Ui, dip: &Dip, obj: &Obj) {
         let mut screen_pos: Vec2Float = Vec2Float::default();
 
-        let mut world_pos = Vec3Float {
+        let mut world_pos = Vec3F {
             x: obj.pos_x_p.read(),
             y: obj.pos_y_p.read(),
             z: obj.pos_z_p.read(),
@@ -844,7 +848,7 @@ impl Ui {
 
         point_to_screen(dip.camera_fpp_di_p, &mut screen_pos, &mut world_pos);
 
-        let player_world_pos = Vec3Float {
+        let player_world_pos = Vec3F {
             x: dip.player_pos_x_p.read(),
             y: dip.player_pos_y_p.read(),
             z: dip.player_pos_z_p.read(),
@@ -864,7 +868,7 @@ impl Ui {
         dip: &Dip,
         obj: &Obj,
         color: [f32; 4],
-        world_pos: &Vec3Float,
+        world_pos: &Vec3F,
     ) {
         let mut screen_pos: Vec2Float = Vec2Float {
             x: 0.0,
@@ -902,7 +906,7 @@ impl Ui {
         dip: &Dip,
         obj: &Obj,
         color: [f32; 4],
-        world_pos: &Vec3Float,
+        world_pos: &Vec3F,
     ) {
         let mut screen_pos: Vec2Float = Vec2Float::default();
 
@@ -922,7 +926,7 @@ impl Ui {
         dip: &Dip,
         obj: &Obj,
         color: [f32; 4],
-        world_pos: &Vec3Float,
+        world_pos: &Vec3F,
     ) {
         let mut screen_pos: Vec2Float = Vec2Float::default();
 
@@ -956,7 +960,7 @@ impl Aim {
     const YAW_ORIGINAL: [u8; 8] = [0xF3, 0x0F, 0x11, 0xB3, 0x74, 0x11, 0x00, 0x00];
 
     #[inline(always)]
-    unsafe fn update_obj(&mut self, dip: &Dip, obj: &Obj, world_pos: &Vec3Float, aim_fov: f32) {
+    unsafe fn update_obj(&mut self, dip: &Dip, obj: &Obj, world_pos: &Vec3F, aim_fov: f32) {
         if !match obj.model_type {
             ModelType::Other | ModelType::SurvivorNormal | ModelType::SurvivorShopkeeper => return,
             ModelType::ZombieNormal => self.switch_aim_filter_zombie_normal,
@@ -1012,7 +1016,10 @@ impl Aim {
                 }
             }
 
-            if self.aiming_model_obj_p.is_bad_read_ptr(0x1) {
+            if self
+                .aiming_model_obj_p
+                .is_bad_read_ptr(size_of::<*const ModelObject>())
+            {
                 self.is_aim_key_down = false;
 
                 if self.is_mouse_patched {
@@ -1028,7 +1035,7 @@ impl Aim {
                 .byte_add(0x8)
                 .cast::<*const CModelObject>();
 
-            if c_model_obj_pp.is_bad_read_ptr(0x8) {
+            if c_model_obj_pp.is_bad_read_ptr(size_of::<*const *const CModelObject>()) {
                 self.is_aim_key_down = false;
 
                 if self.is_mouse_patched {
@@ -1050,7 +1057,7 @@ impl Aim {
                 return;
             }
 
-            let mut world_pos: Vec3Float = Vec3Float {
+            let mut world_pos: Vec3F = Vec3F {
                 x: 0.0,
                 y: 0.0,
                 z: 0.0,
@@ -1058,7 +1065,7 @@ impl Aim {
 
             get_bone_joint_pos(self.aiming_model_obj_p, &mut world_pos, selected_bone);
 
-            let mut pos: Vec3Float = Vec3Float {
+            let mut pos: Vec3F = Vec3F {
                 x: 0.0,
                 y: 0.0,
                 z: 0.0,
@@ -1260,7 +1267,7 @@ unsafe extern "system" fn DllMain(
 
             init(&mut ui);
 
-            while let None = get_dip() {
+            while let None = get_world() {
                 std::thread::sleep(std::time::Duration::from_secs(5));
             }
 
@@ -1307,21 +1314,21 @@ unsafe fn init(ui: &mut Ui) -> Option<()> {
 }
 
 #[inline(always)]
-unsafe fn get_dip() -> Option<Dip> {
+unsafe fn get_world() -> Option<Dip> {
     let mut dip = Dip {
-        c_game_p: null(),
+        game_p: null(),
         game_di_p: null(),
         session_cooperative_di_p: null(),
         level_di_p: null(),
-        c_level_p: null(),
-        c_model_obj_p_array: Array {
+        level_p: null(),
+        model_obj_p_array: Array {
             ptr: null(),
             len: 0,
             max: 0,
         },
         local_client_di_p: null(),
         player_di_p: null_mut(),
-        player_c_model_obj_p: null(),
+        player_model_obj_p: null(),
 
         camera_manage_p: null(),
         camera_fpp_di_p: null(),
@@ -1334,10 +1341,10 @@ unsafe fn get_dip() -> Option<Dip> {
     };
 
     // CGame
-    dip.c_game_p = CGAME_PP.read();
+    dip.game_p = CGAME_PP.read();
 
     // GameDI
-    let game_di_pp = dip.c_game_p.byte_add(0x98).cast::<*const GameDI>();
+    let game_di_pp = dip.game_p.byte_add(0x98).cast::<*const GameDI>();
     if game_di_pp.is_null() {
         return None;
     }
@@ -1377,24 +1384,24 @@ unsafe fn get_dip() -> Option<Dip> {
     if c_level_pp.is_null() {
         return None;
     }
-    dip.c_level_p = c_level_pp.read();
-    if dip.c_level_p.is_null() {
+    dip.level_p = c_level_pp.read();
+    if dip.level_p.is_null() {
         return None;
     }
 
     // Array: CModelObject
     let c_model_obj_p_array_p = dip
-        .c_level_p
+        .level_p
         .byte_add(0x928)
         .cast::<Array<*const CModelObject>>();
     if c_model_obj_p_array_p.is_null() {
         return None;
     }
-    dip.c_model_obj_p_array = c_model_obj_p_array_p.read();
-    if dip.c_model_obj_p_array.ptr.is_null() {
+    dip.model_obj_p_array = c_model_obj_p_array_p.read();
+    if dip.model_obj_p_array.ptr.is_null() {
         return None;
     }
-    if dip.c_model_obj_p_array.len == 0 {
+    if dip.model_obj_p_array.len == 0 {
         return None;
     }
 
@@ -1445,11 +1452,14 @@ unsafe fn get_dip() -> Option<Dip> {
 
     // PlayerCModelObject
     let player_c_model_obj_pp = dip.player_di_p.byte_sub(0x50).cast::<*const CModelObject>();
-    if player_c_model_obj_pp.is_bad_read_ptr(0x8) {
+    if player_c_model_obj_pp.is_bad_read_ptr(size_of::<*mut *const CModelObject>()) {
         return None;
     }
-    dip.player_c_model_obj_p = player_c_model_obj_pp.read();
-    if dip.player_c_model_obj_p.is_bad_read_ptr(0x1) {
+    dip.player_model_obj_p = player_c_model_obj_pp.read();
+    if dip
+        .player_model_obj_p
+        .is_bad_read_ptr(size_of::<*const CModelObject>())
+    {
         return None;
     }
 
@@ -1499,13 +1509,16 @@ unsafe fn get_obj(c_model_obj_p: *const CModelObject) -> Option<Obj> {
 
     // CModelObject
     obj.c_model_obj_p = c_model_obj_p;
-    if obj.c_model_obj_p.is_bad_read_ptr(0x1) {
+    if obj
+        .c_model_obj_p
+        .is_bad_read_ptr(size_of::<*const CModelObject>())
+    {
         return None;
     }
 
     // Logo
     obj.logo_p = obj.c_model_obj_p.byte_add(0x340).cast::<[u8; 4]>();
-    if obj.logo_p.is_bad_read_ptr(0x4) {
+    if obj.logo_p.is_bad_read_ptr(size_of::<[u8; 4]>()) {
         return None;
     }
     let logo = obj.logo_p.read();
@@ -1542,11 +1555,14 @@ unsafe fn get_obj(c_model_obj_p: *const CModelObject) -> Option<Obj> {
         .c_model_obj_p
         .byte_add(0x3B8)
         .cast::<*const ModelObject>();
-    if model_obj_pp.is_bad_read_ptr(0x8) {
+    if model_obj_pp.is_bad_read_ptr(size_of::<*const *const ModelObject>()) {
         return None;
     }
     obj.model_obj_p = model_obj_pp.read();
-    if obj.c_model_obj_p.is_bad_read_ptr(0x1) {
+    if obj
+        .c_model_obj_p
+        .is_bad_read_ptr(size_of::<*const CModelObject>())
+    {
         return None;
     }
 
@@ -1554,9 +1570,9 @@ unsafe fn get_obj(c_model_obj_p: *const CModelObject) -> Option<Obj> {
     obj.pos_x_p = obj.c_model_obj_p.byte_add(0x11C).cast::<f32>();
     obj.pos_y_p = obj.c_model_obj_p.byte_add(0x12C).cast::<f32>();
     obj.pos_z_p = obj.c_model_obj_p.byte_add(0x13C).cast::<f32>();
-    if obj.pos_x_p.is_bad_read_ptr(0x4)
-        || obj.pos_y_p.is_bad_read_ptr(0x4)
-        || obj.pos_z_p.is_bad_read_ptr(0x4)
+    if obj.pos_x_p.is_bad_read_ptr(size_of::<f32>())
+        || obj.pos_y_p.is_bad_read_ptr(size_of::<f32>())
+        || obj.pos_z_p.is_bad_read_ptr(size_of::<f32>())
     {
         return None;
     }
@@ -1569,15 +1585,15 @@ unsafe fn get_obj(c_model_obj_p: *const CModelObject) -> Option<Obj> {
         .model_obj_p
         .byte_add(0xCE8)
         .cast::<*const HealthModule>();
-    if health_module_pp.is_bad_read_ptr(0x8) {
+    if health_module_pp.is_bad_read_ptr(size_of::<*const *const HealthModule>()) {
         return None;
     }
     let model_health_p = health_module_pp.read();
-    if model_health_p.is_bad_read_ptr(0x1) {
+    if model_health_p.is_bad_read_ptr(size_of::<*const *const HealthModule>()) {
         return None;
     }
     obj.health_p = model_health_p.byte_add(0x78).cast::<f32>().cast_mut();
-    if obj.health_p.is_bad_read_ptr(0x4) {
+    if obj.health_p.is_bad_read_ptr(size_of::<f32>()) {
         return None;
     }
     if obj.health_p.read() == 0.0 {
@@ -1586,11 +1602,11 @@ unsafe fn get_obj(c_model_obj_p: *const CModelObject) -> Option<Obj> {
 
     // ModelObjectTypeData
     let mode_type_data_pp = obj.c_model_obj_p.byte_add(0x60).cast::<*const i8>();
-    if mode_type_data_pp.is_bad_read_ptr(0x8) {
+    if mode_type_data_pp.is_bad_read_ptr(size_of::<*const *const i8>()) {
         return None;
     }
     obj.type_data_p = mode_type_data_pp.read();
-    if obj.type_data_p.is_bad_read_ptr(0x5) {
+    if obj.type_data_p.is_bad_read_ptr(size_of::<*const i8>()) {
         return None;
     }
     obj.type_data = CStr::from_ptr(obj.type_data_p).to_str().ok()?.to_string();
