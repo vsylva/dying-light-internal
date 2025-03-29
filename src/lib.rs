@@ -1,3 +1,4 @@
+#![allow(unsafe_op_in_unsafe_fn)]
 mod impls;
 
 use hudhook::{
@@ -364,10 +365,7 @@ impl hudhook::ImguiRenderLoop for Ui {
         }
 
         let mut mouse_pos: hudhook::windows::Win32::Foundation::POINT =
-            hudhook::windows::Win32::Foundation::POINT {
-                x: 0,
-                y: 0,
-            };
+            hudhook::windows::Win32::Foundation::POINT { x: 0, y: 0 };
 
         let _ = GetCursorPos(&mut mouse_pos);
         let _ = ScreenToClient(self.game_window, &mut mouse_pos);
@@ -424,24 +422,18 @@ impl hudhook::ImguiRenderLoop for Ui {
                 ModelType::ZombieHunter => {
                     (self.switch_filter_zombie_hunter, self.color_zombie_hunter)
                 }
-                ModelType::SurvivorNormal => {
-                    (
-                        self.switch_filter_survivor_normal,
-                        self.color_survivor_nomal,
-                    )
-                }
-                ModelType::SurvivorSpecial => {
-                    (
-                        self.switch_filter_survivor_special,
-                        self.color_survivor_special,
-                    )
-                }
-                ModelType::SurvivorShopkeeper => {
-                    (
-                        self.switch_filter_survivor_shopkeeper,
-                        self.color_survivor_shopkeeper,
-                    )
-                }
+                ModelType::SurvivorNormal => (
+                    self.switch_filter_survivor_normal,
+                    self.color_survivor_nomal,
+                ),
+                ModelType::SurvivorSpecial => (
+                    self.switch_filter_survivor_special,
+                    self.color_survivor_special,
+                ),
+                ModelType::SurvivorShopkeeper => (
+                    self.switch_filter_survivor_shopkeeper,
+                    self.color_survivor_shopkeeper,
+                ),
                 ModelType::PlayerHuman => {
                     (self.switch_filter_player_human, self.color_player_human)
                 }
@@ -800,15 +792,9 @@ impl Ui {
                     continue;
                 }
 
-                let mut previous_screen_pos: Vec2Float = Vec2Float {
-                    x: 0.0,
-                    y: 0.0,
-                };
+                let mut previous_screen_pos: Vec2Float = Vec2Float { x: 0.0, y: 0.0 };
 
-                let mut current_screen_pos: Vec2Float = Vec2Float {
-                    x: 0.0,
-                    y: 0.0,
-                };
+                let mut current_screen_pos: Vec2Float = Vec2Float { x: 0.0, y: 0.0 };
 
                 point_to_screen(
                     dip.camera_fpp_di_p,
@@ -870,10 +856,7 @@ impl Ui {
         color: [f32; 4],
         world_pos: &Vec3F,
     ) {
-        let mut screen_pos: Vec2Float = Vec2Float {
-            x: 0.0,
-            y: 0.0,
-        };
+        let mut screen_pos: Vec2Float = Vec2Float { x: 0.0, y: 0.0 };
 
         point_to_screen(dip.camera_fpp_di_p, &mut screen_pos, world_pos);
 
