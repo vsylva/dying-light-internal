@@ -3,6 +3,7 @@ use std::{ffi::c_void, mem, mem::offset_of, ptr, slice};
 use imgui::{
     BackendFlags, Context, DrawCmd, DrawData, DrawIdx, DrawVert, TextureId, internal::RawWrapper,
 };
+
 use windows::{
     Win32::{
         Foundation::RECT,
@@ -196,9 +197,6 @@ impl D3D11RenderEngine {
                         }
                     }
                     DrawCmd::ResetRenderState => {
-                        // Q: looking at the commands recorded in here, it
-                        // doesn't seem like this should have any effect
-                        // whatsoever. What am I doing wrong?
                         self.setup_render_state(draw_data);
                     }
                     DrawCmd::RawCallback {

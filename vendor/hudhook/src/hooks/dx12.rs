@@ -1,5 +1,3 @@
-//! Hooks for DirectX 12.
-
 use std::{ffi::c_void, mem, sync::OnceLock};
 
 use imgui::Context;
@@ -39,10 +37,10 @@ use crate::{
 };
 
 type DXGISwapChainPresentType =
-    unsafe extern "system" fn(This: IDXGISwapChain3, SyncInterval: u32, Flags: u32) -> HRESULT;
+    unsafe extern "system" fn(this: IDXGISwapChain3, sync_interval: u32, flags: u32) -> HRESULT;
 
 type DXGISwapChainResizeBuffersType = unsafe extern "system" fn(
-    This: IDXGISwapChain3,
+    this: IDXGISwapChain3,
     buffer_count: u32,
     width: u32,
     height: u32,
@@ -51,7 +49,7 @@ type DXGISwapChainResizeBuffersType = unsafe extern "system" fn(
 ) -> HRESULT;
 
 type D3D12CommandQueueExecuteCommandListsType = unsafe extern "system" fn(
-    This: ID3D12CommandQueue,
+    this: ID3D12CommandQueue,
     num_command_lists: u32,
     command_lists: *mut ID3D12CommandList,
 );
@@ -72,7 +70,6 @@ enum InitializationContext {
 }
 
 impl InitializationContext {
-    // Transition to a state where the swap chain is set. Ignore other mutations.
     fn insert_swap_chain(&mut self, swap_chain: &IDXGISwapChain3) {
         *self = match mem::replace(self, InitializationContext::Empty) {
             InitializationContext::Empty => {
@@ -82,8 +79,6 @@ impl InitializationContext {
         }
     }
 
-    // Transition to a complete state if the swap chain is set and the command queue
-    // is associated with it.
     fn insert_command_queue(&mut self, command_queue: &ID3D12CommandQueue) {
         *self = match mem::replace(self, InitializationContext::Empty) {
             InitializationContext::WithSwapChain(swap_chain) => {
@@ -97,7 +92,6 @@ impl InitializationContext {
         }
     }
 
-    // Retrieve the values if the context is complete.
     fn get(&self) -> Option<(IDXGISwapChain3, ID3D12CommandQueue)> {
         if let InitializationContext::Complete(swap_chain, command_queue) = self {
             Some((swap_chain.clone(), command_queue.clone()))
@@ -106,7 +100,6 @@ impl InitializationContext {
         }
     }
 
-    // Mark the context as done so no further operations are executed on it.
     fn done(&mut self) {
         if let InitializationContext::Complete(..) = self {
             *self = InitializationContext::Done;
@@ -122,7 +115,7 @@ impl InitializationContext {
 
         match readable_ptrs
             .iter()
-            .position(|&ptr| ptr == command_queue.as_raw())
+            .position(|&ptr| std::ptr::eq(ptr, command_queue.as_raw()))
         {
             Some(_) => true,
             None => false,
@@ -195,7 +188,9 @@ unsafe extern "system" fn dxgi_swap_chain_present_impl(
     } = TRAMPOLINES
         .get()
         .expect("DirectX 12 trampolines uninitialized");
+
     render(&swap_chain).unwrap_or_default();
+
     dxgi_swap_chain_present(swap_chain, sync_interval, flags)
 }
 
@@ -309,21 +304,9 @@ fn get_target_addrs() -> (
     (present_ptr, resize_buffers_ptr, cqecl_ptr)
 }
 
-/// Hooks for DirectX 12.
 pub struct ImguiDx12Hooks([MhHook; 3]);
 
 impl ImguiDx12Hooks {
-    /// Construct a set of [`MhHook`]s that will render UI via the
-    /// provided [`ImguiRenderLoop`].
-    ///
-    /// The following functions are hooked:
-    /// - `IDXGISwapChain3::Present`
-    /// - `IDXGISwapChain3::ResizeBuffers`
-    /// - `ID3D12CommandQueue::ExecuteCommandLists`
-    ///
-    /// # Safety
-    ///
-    /// yolo
     pub unsafe fn new<T>(t: T) -> Self
     where
         T: ImguiRenderLoop + Send + Sync + 'static,
@@ -390,7 +373,7 @@ impl Hooks for ImguiDx12Hooks {
     unsafe fn unhook(&mut self) {
         TRAMPOLINES.take();
         PIPELINE.take().map(|p| p.into_inner().take());
-        RENDER_LOOP.take(); // should already be null
+        RENDER_LOOP.take();
         *INITIALIZATION_CONTEXT.lock() = InitializationContext::Empty;
     }
 }

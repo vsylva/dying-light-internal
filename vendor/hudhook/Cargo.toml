@@ -1,7 +1,7 @@
 [package]
 name = "hudhook"
-version = "0.8.0"
-edition = "2021"
+version = "0.8.1"
+edition = "2024"
 description = "A graphics API hook with dear imgui render loop. Supports DirectX 9, 11, 12, and OpenGL 3."
 homepage = "https://github.com/veeenu/hudhook"
 repository = "https://github.com/veeenu/hudhook"
@@ -9,31 +9,24 @@ documentation = "https://veeenu.github.io/hudhook"
 license-file = "LICENSE"
 authors = ["Andrea Venuta <venutawebdesign@gmail.com>"]
 
-[package.metadata.docs.rs]
-default-target = "x86_64-pc-windows-gnu"
-targets = [
-  "x86_64-pc-windows-msvc",
-  "i686-pc-windows-msvc",
-  "x86_64-pc-windows-gnu",
-  "i686-pc-windows-gnu"
-]
 
 [features]
-default = ["dx9", "dx11", "dx12", "opengl3"]
+default = ["dx9", "dx11", "dx12", "opengl3", "inject"]
 dx9 = []
 dx11 = []
 dx12 = []
 opengl3 = ["dep:gl_generator"]
+inject = []
 imgui-freetype = ["imgui/freetype"]
 imgui-docking = ["imgui/docking"]
 imgui-tables-api = ["imgui/tables-api"]
 
 
 [dependencies]
-bitflags = "2.5.0"
-imgui = { git = "https://github.com/imgui-rs/imgui-rs", rev = "8445334" }
-once_cell = { version = "1.20.0", default-features = false,features=["std"] }
-parking_lot = "0.12"
+bitflags = "2.9.1"
+imgui = { git = "https://github.com/imgui-rs/imgui-rs", rev = "8fba808a9a957ec9d4ee74ea1cfdbe9c211eddee" }
+once_cell = { version = "1.21.3", default-features = false, features = ["std"] }
+parking_lot = "0.12.4"
 
 [dependencies.windows]
 version = "0.54.0"
@@ -63,6 +56,7 @@ features = [
   "Win32_UI_WindowsAndMessaging",
 ]
 
+
 [build-dependencies]
-cc = "1.0.72"
+cc = "1.2.31"
 gl_generator = { version = "0.14.0", optional = true }

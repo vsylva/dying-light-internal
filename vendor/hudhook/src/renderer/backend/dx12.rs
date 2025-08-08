@@ -1,5 +1,3 @@
-// NOTE: see this for ManuallyDrop instances https://github.com/microsoft/windows-rs/issues/2386
-
 use std::{
     ffi::c_void,
     mem,
@@ -10,6 +8,7 @@ use std::{
 use imgui::{
     BackendFlags, Context, DrawCmd, DrawData, DrawIdx, DrawVert, TextureId, internal::RawWrapper,
 };
+
 use windows::{
     Win32::{
         Foundation::*,
@@ -251,9 +250,6 @@ impl D3D12RenderEngine {
                         }
                     }
                     DrawCmd::ResetRenderState => {
-                        // Q: looking at the commands recorded in here, it
-                        // doesn't seem like this should have any effect
-                        // whatsoever. What am I doing wrong?
                         self.setup_render_state(draw_data);
                     }
                     DrawCmd::RawCallback {
@@ -791,7 +787,6 @@ impl TextureHeap {
             self.srv_heap = srv_heap;
             self.srv_staging_heap = srv_staging_heap;
 
-            // Adjust texture GPU pointers.
             let gpu_heap_start = self.srv_heap.GetGPUDescriptorHandleForHeapStart();
             let heap_inc_size = self
                 .device
@@ -915,7 +910,7 @@ impl TextureHeap {
 
         let upload_row_size = width * 4;
         let align = D3D12_TEXTURE_DATA_PITCH_ALIGNMENT;
-        let upload_pitch = upload_row_size.div_ceil(align) * align; // 256 bytes aligned
+        let upload_pitch = upload_row_size.div_ceil(align) * align;
         let upload_size = height * upload_pitch;
 
         let upload_buffer: ID3D12Resource = util::try_out_ptr(|v| unsafe {
@@ -1009,11 +1004,6 @@ impl TextureHeap {
 
         barriers.into_iter().for_each(util::drop_barrier);
 
-        // Apparently, leaking the upload buffer into the location is necessary.
-        // Uncommenting the following line consistently leads to a crash, which
-        // points to a double-free, but I don't know why: upload_buffer should
-        // stay alive with a positive refcount until the end of this block.
-        // let _ = ManuallyDrop::into_inner(src_location.pResource);
         let _ = ManuallyDrop::into_inner(dst_location.pResource);
 
         Ok(())

@@ -1,5 +1,3 @@
-// Based on https://github.com/michaelfairley/rust-imgui-opengl-renderer/
-
 use std::{
     ffi::{CString, c_void},
     mem::{self, offset_of},
@@ -8,6 +6,7 @@ use std::{
 use gl::types::*;
 use imgui::{Context, DrawCmd, DrawData, DrawIdx, DrawVert, TextureId, internal::RawWrapper};
 use once_cell::sync::OnceCell;
+
 use windows::{
     Win32::{
         Foundation::{FARPROC, HINSTANCE},
@@ -26,9 +25,6 @@ mod gl {
         clippy::unused_unit,
         clippy::upper_case_acronyms,
         clippy::manual_non_exhaustive,
-
-        // We support stable but lint on nightly. The following lint isn't available on stable,
-        // so allow `unknown_lints`.
         unknown_lints,
         clippy::missing_transmute_annotations
     )]

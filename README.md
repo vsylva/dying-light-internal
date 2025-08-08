@@ -1,4 +1,5 @@
 <div align="center">
-  <img src="assets/images/demo.png" alt="" width="600px"></div>
-<br />
-<div align="center">将 Releases 页面下载的dll文件放入游戏根目录</div>
+  <img src="assets/demo1.png" alt="" width="800px">
+  <img src="assets/demo2.png" alt="" width="800px">
+  <img src="assets/demo3.png" alt="" width="800px">
+</div>

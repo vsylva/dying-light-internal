@@ -9,13 +9,16 @@ crate-type = ["cdylib"]
 name = "hid"
 
 [dependencies]
-hudhook = {path = "vendor/hudhook", default-features = false, features = [
+hudhook = { path = "vendor/hudhook", default-features = false, features = [
   "dx11",
-]}
-libmem = {version = "5.0.4"}
+] }
+libmem = { version = "5.0.4" }
 
 [build-dependencies]
 forward-dll = "0.1.16"
+
+[profile.dev]
+overflow-checks = false
 
 [profile.release]
 codegen-units = 1

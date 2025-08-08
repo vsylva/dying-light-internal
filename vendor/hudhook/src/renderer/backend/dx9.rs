@@ -1,5 +1,3 @@
-// Based on https://github.com/Veykril/imgui-dx9-renderer
-
 use std::{mem, ptr};
 
 use imgui::{
@@ -144,7 +142,6 @@ impl D3D9RenderEngine {
                 )
             })
             .for_each(|(vertices, indices)| {
-                // CPU swizzle FTW
                 self.vertex_buffer.extend(vertices.map(|draw_vert| {
                     CustomVertex {
                         pos: [draw_vert.pos[0], draw_vert.pos[1], 0.0],
@@ -502,7 +499,6 @@ impl TextureHeap {
         let height = height as usize;
         let width = width as usize;
 
-        // CPU swizzle FTW
         for y in 0..height {
             for x in 0..width {
                 let offset_dest = pitch * y + x * 4;

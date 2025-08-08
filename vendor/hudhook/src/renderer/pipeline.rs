@@ -3,7 +3,6 @@ use std::{
     mem,
     sync::{
         Arc,
-        atomic::{AtomicU32, Ordering},
         mpsc::{self, Receiver, Sender},
     },
     time::{Duration, Instant},
@@ -16,22 +15,18 @@ use windows::{
     Win32::{
         Foundation::{HWND, LPARAM, LRESULT, WPARAM},
         UI::WindowsAndMessaging::{
-            CallWindowProcW, DefWindowProcW, GWLP_WNDPROC, SetWindowLongPtrW,
+            CallWindowProcW, DefWindowProcW, GWLP_WNDPROC, SetWindowLongPtrW, WM_SIZE,
         },
     },
     core::{Error, HRESULT, Result},
 };
 
-use crate::{
-    ImguiRenderLoop, MessageFilter,
-    renderer::{
-        RenderEngine,
-        input::{WndProcType, imgui_wnd_proc_impl},
-    },
-    util,
-};
+use crate::{ImguiRenderLoop, renderer::RenderEngine, util};
 
 type RenderLoop = Box<dyn ImguiRenderLoop + Send + Sync>;
+
+pub type WndProcType =
+    unsafe extern "system" fn(hwnd: HWND, umsg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT;
 
 static PIPELINE_STATES: Lazy<Mutex<HashMap<isize, Arc<PipelineSharedState>>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
@@ -45,7 +40,6 @@ pub(crate) struct PipelineMessage(
 );
 
 pub(crate) struct PipelineSharedState {
-    pub(crate) message_filter: AtomicU32,
     pub(crate) wnd_proc: WndProcType,
     pub(crate) tx: Sender<PipelineMessage>,
 }
@@ -93,7 +87,6 @@ impl<T: RenderEngine> Pipeline<T> {
 
         let (tx, rx) = mpsc::channel();
         let shared_state = Arc::new(PipelineSharedState {
-            message_filter: AtomicU32::new(MessageFilter::empty().bits()),
             wnd_proc,
             tx,
         });
@@ -123,27 +116,23 @@ impl<T: RenderEngine> Pipeline<T> {
         queue_buffer
             .drain(..)
             .for_each(|PipelineMessage(hwnd, umsg, wparam, lparam)| {
-                imgui_wnd_proc_impl(hwnd, umsg, wparam, lparam, self);
+                match umsg {
+                    WM_SIZE => {
+                        self.resize(lparam.0 as u32 & 0xffff, (lparam.0 as u32 >> 16) & 0xffff);
+                    }
+                    _ => {}
+                };
+
+                unsafe { self.render_loop().on_wnd_proc(hwnd, umsg, wparam, lparam) };
             });
         self.queue_buffer
             .set(queue_buffer)
             .expect("OnceCell should be empty");
 
-        let message_filter = unsafe { self.render_loop.message_filter(self.ctx.io()) };
-
-        self.shared_state
-            .message_filter
-            .store(message_filter.bits(), Ordering::SeqCst);
-
         let io = self.ctx.io_mut();
 
         io.nav_active = true;
         io.nav_visible = true;
-
-        unsafe {
-            self.render_loop
-                .before_render(&mut self.ctx, &mut self.engine)
-        };
 
         Ok(())
     }
@@ -164,17 +153,12 @@ impl<T: RenderEngine> Pipeline<T> {
             return Err(Error::from_hresult(HRESULT(-1)));
         }
 
-        let ui = self.ctx.frame();
-        unsafe { self.render_loop.render(ui) };
+        unsafe { self.render_loop.render(&mut self.ctx) };
         let draw_data = self.ctx.render();
 
         self.engine.render(draw_data, render_target)?;
 
         Ok(())
-    }
-
-    pub(crate) fn context(&mut self) -> &mut Context {
-        &mut self.ctx
     }
 
     pub(crate) fn render_loop(&mut self) -> &mut RenderLoop {
@@ -223,14 +207,6 @@ unsafe extern "system" fn pipeline_wnd_proc(
         .tx
         .send(PipelineMessage(hwnd, msg, wparam, lparam))
         .unwrap_or_default();
-    // CONCURRENCY: as the message interpretation now happens out of band, this
-    // expresses the intent as of *before* the current message was received.
-    let message_filter =
-        MessageFilter::from_bits_retain(shared_state.message_filter.load(Ordering::SeqCst));
 
-    if message_filter.is_blocking(msg) {
-        LRESULT(1)
-    } else {
-        CallWindowProcW(Some(shared_state.wnd_proc), hwnd, msg, wparam, lparam)
-    }
+    CallWindowProcW(Some(shared_state.wnd_proc), hwnd, msg, wparam, lparam)
 }

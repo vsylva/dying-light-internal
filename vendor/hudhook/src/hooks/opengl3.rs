@@ -1,5 +1,3 @@
-//! Hooks for OpenGL 3.
-
 use std::{
     ffi::{CString, c_void},
     mem,
@@ -9,6 +7,7 @@ use std::{
 use imgui::Context;
 use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
+
 use windows::{
     Win32::{
         Graphics::Gdi::{HDC, WindowFromDC},
@@ -75,17 +74,15 @@ unsafe extern "system" fn opengl32_wgl_swap_buffers_impl(dc: HDC) {
         .expect("OpenGL3 trampolines uninitialized");
 
     render(dc).unwrap_or_default();
+
     opengl32_wgl_swap_buffers(dc);
 }
 
-// Get the address of wglSwapBuffers in opengl32.dll
 unsafe fn get_opengl_wglswapbuffers_addr() -> OpenGl32wglSwapBuffersType {
-    // Grab a handle to opengl32.dll
     let opengl32dll = CString::new("opengl32.dll").unwrap();
     let opengl32module = GetModuleHandleA(PCSTR(opengl32dll.as_ptr() as *mut _))
         .expect("failed finding opengl32.dll");
 
-    // Grab the address of wglSwapBuffers
     let wglswapbuffers = CString::new("wglSwapBuffers").unwrap();
     let wglswapbuffers_func =
         GetProcAddress(opengl32module, PCSTR(wglswapbuffers.as_ptr() as *mut _)).unwrap();
@@ -95,34 +92,21 @@ unsafe fn get_opengl_wglswapbuffers_addr() -> OpenGl32wglSwapBuffersType {
     )
 }
 
-/// Hooks for OpenGL 3.
 pub struct ImguiOpenGl3Hooks([MhHook; 1]);
 
 impl ImguiOpenGl3Hooks {
-    /// Construct a set of [`MhHook`]s that will render UI via the
-    /// provided [`ImguiRenderLoop`].
-    ///
-    /// The following functions are hooked:
-    /// - `opengl32::wglSwapBuffers`
-    ///
-    /// # Safety
-    ///
-    /// yolo
     pub unsafe fn new<T>(t: T) -> Self
     where
         T: ImguiRenderLoop + Send + Sync + 'static,
     {
-        // Grab the addresses
         let hook_opengl_swap_buffers_address = get_opengl_wglswapbuffers_addr();
 
-        // Create detours
         let hook_opengl_wgl_swap_buffers = MhHook::new(
             hook_opengl_swap_buffers_address as *mut _,
             opengl32_wgl_swap_buffers_impl as *mut _,
         )
         .expect("couldn't create opengl32.wglSwapBuffers hook");
 
-        // Initialize the render loop and store detours
         RENDER_LOOP.get_or_init(move || Box::new(t));
         TRAMPOLINES.get_or_init(|| Trampolines {
             opengl32_wgl_swap_buffers: mem::transmute::<*mut c_void, OpenGl32wglSwapBuffersType>(

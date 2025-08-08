@@ -1,5 +1,3 @@
-//! Hooks for DirectX 11.
-
 use std::{ffi::c_void, mem, sync::OnceLock};
 
 use imgui::Context;
@@ -36,7 +34,7 @@ use crate::{
 };
 
 type DXGISwapChainPresentType =
-    unsafe extern "system" fn(This: IDXGISwapChain, SyncInterval: u32, Flags: u32) -> HRESULT;
+    unsafe extern "system" fn(this: IDXGISwapChain, sync_interval: u32, flagss: u32) -> HRESULT;
 
 struct Trampolines {
     dxgi_swap_chain_present: DXGISwapChainPresentType,
@@ -149,19 +147,9 @@ fn get_target_addrs() -> DXGISwapChainPresentType {
     present_ptr
 }
 
-/// Hooks for DirectX 11.
 pub struct ImguiDx11Hooks([MhHook; 1]);
 
 impl ImguiDx11Hooks {
-    /// Construct a set of [`MhHook`]s that will render UI via the
-    /// provided [`ImguiRenderLoop`].
-    ///
-    /// The following functions are hooked:
-    /// - `IDXGISwapChain::Present`
-    ///
-    /// # Safety
-    ///
-    /// yolo
     pub unsafe fn new<T>(t: T) -> Self
     where
         T: ImguiRenderLoop + Send + Sync + 'static,
@@ -203,6 +191,6 @@ impl Hooks for ImguiDx11Hooks {
     unsafe fn unhook(&mut self) {
         TRAMPOLINES.take();
         PIPELINE.take().map(|p| p.into_inner().take());
-        RENDER_LOOP.take(); // should already be null
+        RENDER_LOOP.take();
     }
 }

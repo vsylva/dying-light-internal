@@ -1,10 +1,9 @@
-//! Hooks for DirectX 9.
-
 use std::{ffi::c_void, mem, sync::OnceLock};
 
 use imgui::Context;
 use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
+
 use windows::{
     Win32::{
         Foundation::{BOOL, HWND, RECT},
@@ -81,10 +80,10 @@ fn render(device: &IDirect3DDevice9) -> Result<()> {
     let surface = unsafe { device.GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO)? };
 
     unsafe { device.BeginScene() }?;
-    pipeline.render(surface)?;
+    let render_result = pipeline.render(surface);
     unsafe { device.EndScene() }?;
 
-    Ok(())
+    render_result
 }
 
 unsafe extern "system" fn dx9_present_impl(
@@ -154,17 +153,15 @@ fn get_target_addrs() -> (Dx9PresentType, Dx9ResetType) {
     };
 
     let dummy_hwnd = DummyHwnd::new();
-    let device: IDirect3DDevice9 = util::try_out_ptr(|v| {
-        unsafe {
-            d9.CreateDevice(
-                D3DADAPTER_DEFAULT,
-                D3DDEVTYPE_NULLREF,
-                dummy_hwnd.hwnd(), // GetDesktopWindow(),
-                D3DCREATE_SOFTWARE_VERTEXPROCESSING as u32,
-                &mut present_params,
-                v,
-            )
-        }
+    let device: IDirect3DDevice9 = util::try_out_ptr(|v| unsafe {
+        d9.CreateDevice(
+            D3DADAPTER_DEFAULT,
+            D3DDEVTYPE_NULLREF,
+            dummy_hwnd.hwnd(),
+            D3DCREATE_SOFTWARE_VERTEXPROCESSING as u32,
+            &mut present_params,
+            v,
+        )
     })
     .expect("IDirect3DDevice9::CreateDevice: failed to create device");
 
@@ -191,19 +188,9 @@ fn get_target_addrs() -> (Dx9PresentType, Dx9ResetType) {
     }
 }
 
-/// Hooks for DirectX 9.
 pub struct ImguiDx9Hooks([MhHook; 2]);
 
 impl ImguiDx9Hooks {
-    /// Construct a set of [`MhHook`]s that will render UI via the
-    /// provided [`ImguiRenderLoop`].
-    ///
-    /// The following functions are hooked:
-    /// - `IDirect3DDevice9::Present`
-    ///
-    /// # Safety
-    ///
-    /// yolo
     pub unsafe fn new<T>(t: T) -> Self
     where
         T: ImguiRenderLoop + Send + Sync + 'static,

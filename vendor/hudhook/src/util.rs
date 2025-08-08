@@ -1,24 +1,23 @@
-//! General-purpose utilities. These are used across the [`crate`] but have
-//! proven useful in client code as well.
+use std::ffi::{OsString, c_void};
 
 use std::{
-    ffi::{OsString, c_void},
-    mem::ManuallyDrop,
+    mem::{ManuallyDrop, size_of},
     os::windows::ffi::OsStringExt,
     path::PathBuf,
     sync::atomic::{AtomicU64, Ordering},
 };
 
+use windows::Win32::Foundation::{HANDLE, HMODULE, HWND, MAX_PATH, RECT};
+
+use windows::Win32::Graphics::Direct3D12::{
+    D3D12_FENCE_FLAG_NONE, D3D12_RESOURCE_BARRIER, D3D12_RESOURCE_BARRIER_0,
+    D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, D3D12_RESOURCE_BARRIER_FLAG_NONE,
+    D3D12_RESOURCE_BARRIER_TYPE_TRANSITION, D3D12_RESOURCE_STATES,
+    D3D12_RESOURCE_TRANSITION_BARRIER, ID3D12Device, ID3D12Fence, ID3D12Resource,
+};
+
 use windows::{
     Win32::{
-        Foundation::{HANDLE, HMODULE, HWND, MAX_PATH, RECT},
-        Graphics::Direct3D12::{
-            D3D12_FENCE_FLAG_NONE, D3D12_RESOURCE_BARRIER, D3D12_RESOURCE_BARRIER_0,
-            D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, D3D12_RESOURCE_BARRIER_FLAG_NONE,
-            D3D12_RESOURCE_BARRIER_TYPE_TRANSITION, D3D12_RESOURCE_STATES,
-            D3D12_RESOURCE_TRANSITION_BARRIER, D3D12GetDebugInterface, ID3D12Debug, ID3D12Device,
-            ID3D12Fence, ID3D12Resource,
-        },
         System::{
             LibraryLoader::{
                 GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
@@ -37,14 +36,6 @@ use windows::{
     core::s,
 };
 
-/// Helper for fallible [`windows`] APIs that have an out-param with a default
-/// value.
-///
-/// # Example
-///
-/// ```
-/// let swap_chain_desc = try_out_param(|sd| unsafe { self.swap_chain.GetDesc1(sd) })?;
-/// ```
 pub fn try_out_param<T, F, E, O>(mut f: F) -> Result<T, E>
 where
     T: Default,
@@ -57,16 +48,6 @@ where
     }
 }
 
-/// Helper for fallible [`windows`] APIs that have an optional pointer
-/// out-param.
-///
-/// # Example
-///
-/// ```
-/// let dev: ID3D12Device =
-///     try_out_ptr(|v| unsafe { D3D12CreateDevice(&adapter, D3D_FEATURE_LEVEL_11_0, v) })
-///         .expect("D3D12CreateDevice failed");
-/// ```
 pub fn try_out_ptr<T, F, E, O>(mut f: F) -> Result<T, E>
 where
     F: FnMut(&mut Option<T>) -> Result<O, E>,
@@ -78,22 +59,6 @@ where
     }
 }
 
-/// Helper for fallible [`windows`] APIs that have an optional pointer
-/// out-param and an optional pointer err-param.
-///
-/// # Example
-///
-/// ```
-/// let blob: ID3DBlob = util::try_out_err_blob(|v, err_blob| {
-///     D3D12SerializeRootSignature(
-///         &root_signature_desc,
-///         D3D_ROOT_SIGNATURE_VERSION_1_0,
-///         v,
-///         Some(err_blob),
-///     )
-/// })
-/// .map_err(print_err_blob("Compiling vertex shader"))?;
-/// ```
 pub fn try_out_err_blob<T1, T2, F, E, O>(mut f: F) -> Result<T1, (E, T2)>
 where
     F: FnMut(&mut Option<T1>, &mut Option<T2>) -> Result<O, E>,
@@ -106,13 +71,6 @@ where
     }
 }
 
-/// Helper for infallible APIs that have out-params, like OpenGL 3.
-///
-/// # Example
-///
-/// ```
-/// let vertex_buffer = out_param(|x| unsafe { gl.GenBuffers(1, x) });
-/// ```
 pub fn out_param<T: Default, F>(f: F) -> T
 where
     F: FnOnce(&mut T),
@@ -122,31 +80,12 @@ where
     val
 }
 
-/// Enables the Direct3D12 debug interface.
-///
-/// It will not panic if the interface is not available. Call this from your
-/// application before a DirectX 12 device is initialized. It could fail in
-/// DirectX 12 host applications that will have initialized their device
-/// already, but should not fail in other host applications.
-pub fn enable_debug_interface() {
-    let debug_interface: Result<ID3D12Debug, _> =
-        try_out_ptr(|v| unsafe { D3D12GetDebugInterface(v) });
-
-    match debug_interface {
-        Ok(debug_interface) => unsafe { debug_interface.EnableDebugLayer() },
-        _ => (),
-    }
-}
-
-/// Helper that returns width and height of a given
-/// [`windows::Win32::Foundation::HWND`].
 pub fn win_size(hwnd: HWND) -> (i32, i32) {
     let mut rect = RECT::default();
     unsafe { GetClientRect(hwnd, &mut rect).unwrap() };
     (rect.right - rect.left, rect.bottom - rect.top)
 }
 
-/// Returns the path of the current module.
 pub fn get_dll_path() -> Option<PathBuf> {
     let mut hmodule = HMODULE(0);
     if let Err(_) = unsafe {
@@ -165,13 +104,6 @@ pub fn get_dll_path() -> Option<PathBuf> {
     Some(OsString::from_wide(&sz_filename[..len]).into())
 }
 
-/// Creates a [`D3D12_RESOURCE_BARRIER`].
-///
-/// Use this function and the associated [`drop_barrier`] for correctly managing
-/// barrier resources.
-///
-/// RAII was not used due to the complicated signature of
-/// [`windows::Win32::Graphics::Direct3D12::ID3D12GraphicsCommandList::ResourceBarrier`].
 pub fn create_barrier(
     resource: &ID3D12Resource,
     before: D3D12_RESOURCE_STATES,
@@ -191,19 +123,11 @@ pub fn create_barrier(
     }
 }
 
-/// Drops a [`D3D12_RESOURCE_BARRIER`].
-///
-/// Use this function and the associated [`create_barrier`] for correctly
-/// managing barrier resources.
-///
-/// RAII was not used due to the complicated signature of
-/// [`windows::Win32::Graphics::Direct3D12::ID3D12GraphicsCommandList::ResourceBarrier`].
 pub fn drop_barrier(barrier: D3D12_RESOURCE_BARRIER) {
     let transition = ManuallyDrop::into_inner(unsafe { barrier.Anonymous.Transition });
     let _ = ManuallyDrop::into_inner(transition.pResource);
 }
 
-/// Wrapper around [`windows::Win32::Graphics::Direct3D12::ID3D12Fence`].
 pub struct Fence {
     fence: ID3D12Fence,
     value: AtomicU64,
@@ -211,7 +135,6 @@ pub struct Fence {
 }
 
 impl Fence {
-    /// Construct the fence.
     pub fn new(device: &ID3D12Device) -> windows::core::Result<Self> {
         let fence = unsafe { device.CreateFence(0, D3D12_FENCE_FLAG_NONE) }?;
         let value = AtomicU64::new(0);
@@ -224,22 +147,18 @@ impl Fence {
         })
     }
 
-    /// Retrieve the underlying fence object to pass to the D3D12 APIs.
     pub fn fence(&self) -> &ID3D12Fence {
         &self.fence
     }
 
-    /// Retrieve the current fence value.
     pub fn value(&self) -> u64 {
         self.value.load(Ordering::SeqCst)
     }
 
-    /// Atomically increase the fence value.
     pub fn incr(&self) {
         self.value.fetch_add(1, Ordering::SeqCst);
     }
 
-    /// Wait for completion of the fence.
     pub fn wait(&self) -> windows::core::Result<()> {
         let value = self.value();
         unsafe {
@@ -253,23 +172,11 @@ impl Fence {
     }
 }
 
-/// Returns a slice of **up to** `limit` elements of type `T` starting at `ptr`.
-///
-/// If the memory protection of some pages in this region prevents reading from
-/// it, the slice is truncated to the first `N` consecutive readable elements.
-///
-/// # Safety
-///
-/// - `ptr` must not be a null pointer and must be properly aligned.
-/// - Ignoring memory protection, the memory at `ptr` must be valid for at least
-///   `limit` elements of type `T` (see [`std::slice::from_raw_parts`]).
 pub unsafe fn readable_region<T>(ptr: *const T, limit: usize) -> &'static [T] {
-    /// Check if the page pointed to by `ptr` is readable.
     unsafe fn is_readable(
         ptr: *const c_void,
         memory_basic_info: &mut MEMORY_BASIC_INFORMATION,
     ) -> bool {
-        // If the page protection has any of these flags set, we can read from it
         const PAGE_READABLE: PAGE_PROTECTION_FLAGS = PAGE_PROTECTION_FLAGS(
             PAGE_READONLY.0 | PAGE_READWRITE.0 | PAGE_EXECUTE_READ.0 | PAGE_EXECUTE_READWRITE.0,
         );
@@ -284,7 +191,6 @@ pub unsafe fn readable_region<T>(ptr: *const T, limit: usize) -> &'static [T] {
             && (memory_basic_info.Protect & PAGE_READABLE).0 != 0
     }
 
-    // This is probably 0x1000 (4096) bytes
     let page_size_bytes = {
         let mut system_info = SYSTEM_INFO::default();
         unsafe { GetSystemInfo(&mut system_info) };
@@ -292,8 +198,6 @@ pub unsafe fn readable_region<T>(ptr: *const T, limit: usize) -> &'static [T] {
     };
     let page_align_mask = page_size_bytes - 1;
 
-    // Calculate the starting address of the first and last pages that need to be
-    // readable in order to read `limit` elements of type `T` from `ptr`
     let first_page_addr = (ptr as usize) & !page_align_mask;
     let last_page_addr = (ptr as usize + (limit * size_of::<T>()) - 1) & !page_align_mask;
 
@@ -303,21 +207,11 @@ pub unsafe fn readable_region<T>(ptr: *const T, limit: usize) -> &'static [T] {
             continue;
         }
 
-        // If this page is not readable, we can read from `ptr`
-        // up to (not including) the start of this page
-        //
-        // Note: `page_addr` can be less than `ptr` if `ptr` is not page-aligned
         let num_readable = page_addr.saturating_sub(ptr as usize) / size_of::<T>();
 
-        // SAFETY:
-        // - `ptr` is a valid pointer to `limit` elements of type `T`
-        // - `num_readable` is always less than or equal to `limit`
         return std::slice::from_raw_parts(ptr, num_readable);
     }
 
-    // SAFETY:
-    // - `ptr` is a valid pointer to `limit` elements of type `T` and is properly
-    //   aligned
     std::slice::from_raw_parts(ptr, limit)
 }
 
@@ -336,7 +230,6 @@ mod tests {
             return Err(windows::core::Error::from_win32());
         }
 
-        // Make the second page unreadable
         let mut old_protect = PAGE_PROTECTION_FLAGS::default();
         unsafe {
             VirtualProtect(
