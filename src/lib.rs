@@ -1449,7 +1449,7 @@ unsafe fn get_obj(model_obj_p: *const ModelObject) -> Option<Obj> {
 
     obj.model_obj_str = std::ffi::CStr::from_ptr(obj.model_obj_str_p)
         .to_string_lossy()
-        .into();
+        .to_string();
 
     let bytes = obj.model_obj_str.as_bytes();
 
@@ -1459,37 +1459,55 @@ unsafe fn get_obj(model_obj_p: *const ModelObject) -> Option<Obj> {
     }
 
     match &bytes[start..] {
-        b if b.starts_with(b"Pla") => obj.model_obj_type = ModelType::PlayerHuman,
-        b if b.starts_with(b"Zom") => obj.model_obj_type = ModelType::PlayerHunter,
-
-        b if b.starts_with(b"Bit") || b.starts_with(b"Vir") || b.starts_with(b"Dea") => {
+        // b if b.starts_with(b"Nig")
+        //     || b.starts_with(b"Scr")
+        //     || b.starts_with(b"Gas")
+        //     || b.starts_with(b"Dem")
+        //     || b.starts_with(b"Goo")
+        //     || b.starts_with(b"Toa")
+        //     || b.starts_with(b"Bom")
+        //     // BTZ_Su BTZ_Bi
+        //     || b.starts_with(b"BTZ_Su") =>
+        // {
+        //     obj.model_obj_type = ModelType::ZombieSpecial
+        // }
+        b if b.starts_with(b"Bi") || b.starts_with(b"Vi") || b.starts_with(b"Dea") => {
             obj.model_obj_type = ModelType::ZombieNormal
         }
 
-        b if b.starts_with(b"Nig")
-            || b.starts_with(b"Scr")
-            || b.starts_with(b"Gas")
+        b if b.starts_with(b"Ni")
+            || b.starts_with(b"Sc")
+            || b.starts_with(b"Ga")
             || b.starts_with(b"Dem")
-            || b.starts_with(b"Goo")
-            || b.starts_with(b"Toa")
-            || b.starts_with(b"Bom") =>
+            || b.starts_with(b"Go")
+            || b.starts_with(b"To")
+            || b.starts_with(b"Bo")
+            // BTZ_Su BTZ_Bi
+            || b.starts_with(b"BT") =>
         {
             obj.model_obj_type = ModelType::ZombieSpecial
         }
 
-        b if b.starts_with(b"Vol") => obj.model_obj_type = ModelType::ZombieHunter,
+        b if b.starts_with(b"Vo") => obj.model_obj_type = ModelType::ZombieHunter,
 
-        b if b.starts_with(b"enc") || b.starts_with(b"0T") => {
+        b if b.starts_with(b"Pl") => obj.model_obj_type = ModelType::PlayerHuman,
+        b if b.starts_with(b"Zo") || b.starts_with(b"DW") => {
+            // DW_Zombie
+            obj.model_obj_type = ModelType::PlayerHunter
+        }
+
+        // enc很多是中立
+        b if b.starts_with(b"en") || b.starts_with(b"0T") || b.starts_with(b"Qu") => {
             obj.model_obj_type = ModelType::SurvivorSpecial
         }
 
-        b if b.starts_with(b"Sho") || b.starts_with(b"Spi") => {
+        b if b.starts_with(b"Sh") || b.starts_with(b"Sp") => {
             obj.model_obj_type = ModelType::SurvivorShopkeeper
         }
 
         // 塔楼上面的坐在桌子面前操作的机械工
-        b if b.starts_with(b"Hub") => obj.model_obj_type = ModelType::SurvivorNormal,
-
+        // 泽雷博士车门前躺着的马里克
+        // b if b.starts_with(b"Hub") || b.starts_with(b"Maa") => obj.model_obj_type = ModelType::SurvivorNormal,
         _ => {
             if obj.c_model_obj_logo_p.read() == 0x2000 {
                 obj.model_obj_type = ModelType::SurvivorNormal
