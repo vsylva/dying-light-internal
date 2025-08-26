@@ -97,15 +97,15 @@ const PITCH_ORIGINAL: [u8; 8] = [0xF3, 0x0F, 0x11, 0x83, 0x78, 0x11, 0x00, 0x00]
 const YAW_ORIGINAL: [u8; 8] = [0xF3, 0x0F, 0x11, 0xB3, 0x74, 0x11, 0x00, 0x00];
 
 trait Ptr {
-    unsafe extern "C" fn is_bad_read_ptr(&self, size: usize) -> bool;
+    unsafe fn is_bad_read_ptr(&self, size: usize) -> bool;
 }
 impl<T> Ptr for *const T {
-    unsafe extern "C" fn is_bad_read_ptr(&self, size: usize) -> bool {
+    unsafe fn is_bad_read_ptr(&self, size: usize) -> bool {
         IsBadReadPtr(Some(self.cast()), size).as_bool()
     }
 }
 impl<T> Ptr for *mut T {
-    unsafe extern "C" fn is_bad_read_ptr(&self, size: usize) -> bool {
+    unsafe fn is_bad_read_ptr(&self, size: usize) -> bool {
         IsBadReadPtr(Some(self.cast()), size).as_bool()
     }
 }
@@ -436,7 +436,7 @@ impl Default for Game {
             aim_selected_key: AimKeys::RMouseButton,
 
             color_zombie_normal: [1.0, 1.0, 1.0, 1.0], // 白色
-            color_zombie_special: [0.9375, 0.7969, 1.0, 1.0], // 粉色
+            color_zombie_special: [0.7569, 1.0, 0.7569, 1.0], // 深海绿
             color_zombie_hunter: [1.0, 0.0, 1.0, 1.0], // 紫红色
 
             color_survivor_nomal: [0.2549, 0.4118, 0.8824, 1.0], // 皇家蓝
@@ -530,8 +530,8 @@ impl hudhook::ImguiRenderLoop for Game {
 
 // ModelObj
 // 0x104 0x114 0x124 world_pos
-// 0x78  ObjectType, 16 HumanAI 17 PlayerDI
-// 0x7C ObjectType2, 17 HumanAI, 17 PlayerDI
+// 0x78  ObjectType,  16 HumanAI  17 PlayerDI
+// 0x7C  ObjectType2, 17 HumanAI  17 PlayerDI
 // 0x90 是-18以后的0x78
 unsafe fn on_frame_draw(game: &mut Game, ui: &hudhook::imgui::Ui) {
     let world = match get_world() {
@@ -627,12 +627,27 @@ unsafe fn on_frame_draw(game: &mut Game, ui: &hudhook::imgui::Ui) {
             continue;
         }
 
+        let mut screen_pos: Vec2<f32> = Vec2::default();
+        point_to_screen(
+            world.camera_fpp_di_p,
+            &mut screen_pos,
+            &obj.c_model_obj_world_pos,
+        );
+
         if game.aim_toggle {
             aim_update_obj(game, &world, &obj);
         }
 
+        //  ui.get_background_draw_list() 不能 let，否则在下次调用 ui.get_background_draw_list()时会闪退
         if game.toggle_draw_model_type_name {
-            draw_model_type(ui, &world, &obj, color);
+            let data = format!(
+                "{}  {:.2}",
+                obj.model_obj_type,
+                get_distance_to(obj.model_obj_p, world.player_world_pos_p),
+            );
+
+            ui.get_background_draw_list()
+                .add_text([screen_pos.x, screen_pos.y], color, data);
         }
 
         if game.toggle_draw_bones {
@@ -640,32 +655,72 @@ unsafe fn on_frame_draw(game: &mut Game, ui: &hudhook::imgui::Ui) {
         }
 
         if game.toggle_draw_visible_line {
-            draw_visible_line(ui, &world, &obj, color);
+            let bone_world_pos: Vec3<f32> = Vec3::default();
+            get_bone_joint_pos(
+                obj.model_obj_p,
+                &bone_world_pos,
+                game.aim_selected_bone as u8,
+            );
+
+            if raytest_to_target(
+                obj.model_obj_p,
+                obj.model_obj_p,
+                get_position(world.camera_fpp_di_p),
+                &bone_world_pos,
+                4,
+            ) != 0
+            {
+                let mut bone_screen_pos: Vec2<f32> = Vec2::default();
+                point_to_screen(world.camera_fpp_di_p, &mut bone_screen_pos, &bone_world_pos);
+
+                ui.get_background_draw_list()
+                    .add_line(
+                        [
+                            get_screen_width(world.game_di_p) as f32 / 2.0,
+                            get_screen_height(world.game_di_p) as f32,
+                        ],
+                        [bone_screen_pos.x, bone_screen_pos.y],
+                        color,
+                    )
+                    .thickness(2.0)
+                    .build();
+            }
         }
 
         if game.toggle_draw_type_data {
-            draw_type_data(ui, &world, &obj, color);
+            ui.get_background_draw_list().add_text(
+                [screen_pos.x, screen_pos.y],
+                color,
+                obj.model_obj_str.as_str(),
+            );
         }
 
         if game.toggle_draw_logo {
-            draw_logo(ui, &world, &obj, color);
+            ui.get_background_draw_list().add_text(
+                [screen_pos.x, screen_pos.y],
+                color,
+                format!("{:#X?}", obj.c_model_obj_logo_p.read()),
+            );
         }
 
         if game.toggle_draw_model_obj_p {
-            draw_model_obj_p(ui, &world, &obj, color);
+            ui.get_background_draw_list().add_text(
+                [screen_pos.x, screen_pos.y],
+                color,
+                format!(
+                    "model_obj_p: {:p}\nc_model_obj_p: {:p}",
+                    obj.model_obj_p, obj.c_model_obj_p,
+                ),
+            );
         }
     }
 
     if game.aim_toggle {
         aim_lock_obj(game, &world, game.aim_selected_bone as u8);
     }
-
-    if !game.is_menu_on {
-        return;
-    }
 }
 
-unsafe extern "C" fn on_frame_draw_ui(game: &mut Game, ui: &hudhook::imgui::Ui) {
+unsafe fn on_frame_draw_ui(game: &mut Game, ui: &hudhook::imgui::Ui) {
     if let Some(val) = ui.tab_item("过滤") {
         ui.slider(
             "字体缩放##FontGlobalScale",
@@ -785,7 +840,7 @@ unsafe extern "C" fn on_frame_draw_ui(game: &mut Game, ui: &hudhook::imgui::Ui) 
             &mut game.toggle_draw_type_data,
         );
 
-        ui.checkbox("标志##toggle_draw_logo", &mut game.toggle_draw_logo);
+        ui.checkbox("特征标志##toggle_draw_logo", &mut game.toggle_draw_logo);
 
         ui.checkbox(
             "对象地址##toggle_draw_model_obj_p",
@@ -795,6 +850,11 @@ unsafe extern "C" fn on_frame_draw_ui(game: &mut Game, ui: &hudhook::imgui::Ui) 
         ui.checkbox(
             "对象地址数组##toggle_draw_model_obj_p_array",
             &mut game.toggle_draw_model_obj_p_array,
+        );
+
+        ui.checkbox(
+            "世界地址##toggle_draw_world_data",
+            &mut game.toggle_draw_world_data,
         );
 
         val.end();
@@ -934,111 +994,7 @@ unsafe fn draw_bones(ui: &hudhook::imgui::Ui, world: &World, obj: &Obj, color: [
 }
 
 #[inline(always)]
-unsafe fn draw_visible_line(ui: &hudhook::imgui::Ui, world: &World, obj: &Obj, color: [f32; 4]) {
-    let mut screen_pos: Vec2<f32> = Vec2::default();
-
-    point_to_screen(
-        world.camera_fpp_di_p,
-        &mut screen_pos,
-        &obj.c_model_obj_world_pos,
-    );
-
-    if raytest_to_target(
-        obj.model_obj_p,
-        get_position(world.camera_fpp_di_p),
-        &obj.c_model_obj_world_pos,
-        0,
-    ) == 0
-    {
-        return;
-    }
-
-    ui.get_background_draw_list()
-        .add_line(
-            [
-                get_screen_width(world.game_di_p) as f32 / 2.0,
-                get_screen_height(world.game_di_p) as f32,
-            ],
-            [screen_pos.x, screen_pos.y],
-            color,
-        )
-        .thickness(2.0)
-        .build();
-}
-
-#[inline(always)]
-unsafe fn draw_model_type(ui: &hudhook::imgui::Ui, world: &World, obj: &Obj, color: [f32; 4]) {
-    let mut screen_pos: Vec2<f32> = Vec2::default();
-
-    point_to_screen(
-        world.camera_fpp_di_p,
-        &mut screen_pos,
-        &obj.c_model_obj_world_pos,
-    );
-
-    let data = format!(
-        "{}  {:.2}",
-        obj.model_obj_type,
-        get_distance_to(obj.model_obj_p, world.player_world_pos_p),
-    );
-
-    ui.get_background_draw_list()
-        .add_text([screen_pos.x, screen_pos.y], color, data);
-}
-
-#[inline(always)]
-unsafe fn draw_type_data(ui: &hudhook::imgui::Ui, world: &World, obj: &Obj, color: [f32; 4]) {
-    let mut screen_pos: Vec2<f32> = Vec2::default();
-
-    point_to_screen(
-        world.camera_fpp_di_p,
-        &mut screen_pos,
-        &obj.c_model_obj_world_pos,
-    );
-
-    ui.get_background_draw_list().add_text(
-        [screen_pos.x, screen_pos.y],
-        color,
-        obj.model_obj_str.as_str(),
-    );
-}
-
-#[inline(always)]
-unsafe fn draw_logo(ui: &hudhook::imgui::Ui, world: &World, obj: &Obj, color: [f32; 4]) {
-    let mut screen_pos: Vec2<f32> = Vec2::default();
-
-    point_to_screen(
-        world.camera_fpp_di_p,
-        &mut screen_pos,
-        &obj.c_model_obj_world_pos,
-    );
-
-    ui.get_background_draw_list().add_text(
-        [screen_pos.x, screen_pos.y],
-        color,
-        format!("\n\n{:#X?}", obj.c_model_obj_logo_p.read()),
-    );
-}
-
-#[inline(always)]
-unsafe fn draw_model_obj_p(ui: &hudhook::imgui::Ui, world: &World, obj: &Obj, color: [f32; 4]) {
-    let mut screen_pos: Vec2<f32> = Vec2::default();
-
-    point_to_screen(
-        world.camera_fpp_di_p,
-        &mut screen_pos,
-        &obj.c_model_obj_world_pos,
-    );
-
-    ui.get_background_draw_list().add_text(
-        [screen_pos.x, screen_pos.y],
-        color,
-        format!("{:p}\n{:p}", obj.model_obj_p, obj.c_model_obj_p,),
-    );
-}
-
-#[inline(always)]
-unsafe extern "C" fn aim_update_obj(game: &mut Game, world: &World, obj: &Obj) {
+unsafe fn aim_update_obj(game: &mut Game, world: &World, obj: &Obj) {
     if !match obj.model_obj_type {
         ModelType::Other | ModelType::SurvivorNormal | ModelType::SurvivorShopkeeper => return,
         ModelType::ZombieNormal => game.aim_toggle_filter_zombie_normal,
@@ -1074,7 +1030,7 @@ unsafe extern "C" fn aim_update_obj(game: &mut Game, world: &World, obj: &Obj) {
 }
 
 #[inline(always)]
-unsafe extern "C" fn aim_lock_obj(game: &mut Game, world: &World, selected_bone: u8) {
+unsafe fn aim_lock_obj(game: &mut Game, world: &World, selected_bone: u8) {
     if !game.aim_is_key_down {
         if game.aim_is_mouse_patched {
             game.aim_is_mouse_patched = false;
@@ -1169,7 +1125,7 @@ unsafe extern "C" fn aim_lock_obj(game: &mut Game, world: &World, selected_bone:
 }
 
 #[inline(always)]
-unsafe extern "C" fn mouse_patch(game: &mut Game) {
+unsafe fn mouse_patch(game: &mut Game) {
     libmem::memory::write_memory_ex(
         &libmem::process::get_process().unwrap(),
         game.aim_mouse_yaw_p,
@@ -1184,7 +1140,7 @@ unsafe extern "C" fn mouse_patch(game: &mut Game) {
 }
 
 #[inline(always)]
-unsafe extern "C" fn mouse_unpatch(game: &mut Game) {
+unsafe fn mouse_unpatch(game: &mut Game) {
     libmem::memory::write_memory_ex(
         &libmem::process::get_process().unwrap(),
         game.aim_mouse_yaw_p,
@@ -1490,20 +1446,21 @@ unsafe fn get_obj(model_obj_p: *const ModelObject) -> Option<Obj> {
 
         b if b.starts_with(b"Vo") => obj.model_obj_type = ModelType::ZombieHunter,
 
-        b if b.starts_with(b"Pl") => obj.model_obj_type = ModelType::PlayerHuman,
         b if b.starts_with(b"Zo") || b.starts_with(b"DW") => {
             // DW_Zombie
             obj.model_obj_type = ModelType::PlayerHunter
         }
 
-        // enc很多是中立
-        b if b.starts_with(b"en") || b.starts_with(b"0T") || b.starts_with(b"Qu") => {
+        // enc很多是中立    Quest_GoodNight是友好NPC
+        b if b.starts_with(b"en") || b.starts_with(b"0T") => {
             obj.model_obj_type = ModelType::SurvivorSpecial
         }
 
         b if b.starts_with(b"Sh") || b.starts_with(b"Sp") => {
             obj.model_obj_type = ModelType::SurvivorShopkeeper
         }
+
+        b if b.starts_with(b"Pl") => obj.model_obj_type = ModelType::PlayerHuman,
 
         // 塔楼上面的坐在桌子面前操作的机械工
         // 泽雷博士车门前躺着的马里克
@@ -1521,7 +1478,7 @@ unsafe fn get_obj(model_obj_p: *const ModelObject) -> Option<Obj> {
 }
 
 // #[target_feature(enable = "sse")]
-// unsafe extern "C" fn get_distance_to_sse(pos1: Vec3<f32>, pos2: Vec3<f32>) -> f32 {
+// unsafe  fn get_distance_to_sse(pos1: Vec3<f32>, pos2: Vec3<f32>) -> f32 {
 //     let a = std::arch::x86_64::_mm_set_ps(0.0, pos1.z, pos1.y, pos1.x);
 //     let b = std::arch::x86_64::_mm_set_ps(0.0, pos2.z, pos2.y, pos2.x);
 //     let diff = std::arch::x86_64::_mm_sub_ps(b, a);

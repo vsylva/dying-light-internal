@@ -111,6 +111,7 @@ pub(crate) unsafe fn get_distance_to(
 #[inline(always)]
 pub(crate) unsafe fn raytest_to_target(
     model_obj_p: *const ModelObject,
+    target_model_obj_p: *const ModelObject,
     from: *const Vec3<f32>,
     to: *const Vec3<f32>,
     para: u8,
@@ -138,7 +139,7 @@ pub(crate) unsafe fn raytest_to_target(
         PROC_PTR.write(transmute(PROC));
     });
 
-    return PROC_PTR.assume_init()(model_obj_p, model_obj_p, from, to, para);
+    return PROC_PTR.assume_init()(model_obj_p, target_model_obj_p, from, to, para);
 }
 
 #[inline(always)]
@@ -146,8 +147,9 @@ pub(crate) unsafe fn get_bone_joint_pos(
     model_obj_p: *const ModelObject,
     world_pos: *const Vec3<f32>,
     index: u8,
-) {
-    type Prototype = unsafe extern "system" fn(*const ModelObject, *const Vec3<f32>, u8);
+) -> *const u8 {
+    type Prototype =
+        unsafe extern "system" fn(*const ModelObject, *const Vec3<f32>, u8) -> *const u8;
 
     static mut PROC: usize = 0;
     static mut PROC_PTR: MaybeUninit<Prototype> = MaybeUninit::uninit();
@@ -164,7 +166,7 @@ pub(crate) unsafe fn get_bone_joint_pos(
         PROC_PTR.write(transmute(PROC));
     });
 
-    PROC_PTR.assume_init()(model_obj_p, world_pos, index);
+    PROC_PTR.assume_init()(model_obj_p, world_pos, index)
 }
 
 // #[inline(always)]
@@ -325,7 +327,7 @@ pub(crate) unsafe fn is_in_frustum(model_obj_p: *const ModelObject) -> i8 {
 pub(crate) unsafe fn get_objects_in_frustum(
     camera_fpp_di_p: *const CameraFPPDI,
     model_obj_p_array_p: *const crate::Array<*const ModelObject>,
-    distance: f32,
+    para: f32,
 ) -> i8 {
     type Prototype = unsafe extern "system" fn(
         *const CameraFPPDI,
@@ -348,5 +350,5 @@ pub(crate) unsafe fn get_objects_in_frustum(
         PROC_PTR.write(transmute(PROC));
     });
 
-    PROC_PTR.assume_init()(camera_fpp_di_p, model_obj_p_array_p, distance)
+    PROC_PTR.assume_init()(camera_fpp_di_p, model_obj_p_array_p, para)
 }
