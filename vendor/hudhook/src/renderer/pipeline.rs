@@ -78,6 +78,7 @@ impl<T: RenderEngine> Pipeline<T> {
             #[cfg(target_arch = "x86_64")]
             type SwlpRet = isize;
 
+            #[allow(function_casts_as_integer)]
             mem::transmute::<SwlpRet, WndProcType>(SetWindowLongPtrW(
                 hwnd,
                 GWLP_WNDPROC,
