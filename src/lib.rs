@@ -489,7 +489,10 @@ impl hudhook::ImguiRenderLoop for Game {
         }
 
         let mut mouse_pos: hudhook::windows::Win32::Foundation::POINT =
-            hudhook::windows::Win32::Foundation::POINT { x: 0, y: 0 };
+            hudhook::windows::Win32::Foundation::POINT {
+                x: 0,
+                y: 0,
+            };
 
         GetCursorPos(&mut mouse_pos).unwrap_or_default();
         ScreenToClient(self.game_window, &mut mouse_pos);
@@ -515,7 +518,7 @@ impl hudhook::ImguiRenderLoop for Game {
             return;
         }
 
-        ui.window("[~]键\t1.52.0.0")
+        ui.window("[~]键")
             .title_bar(true)
             .size([600.0, 450.0], hudhook::imgui::Condition::FirstUseEver)
             .build(|| {
@@ -606,18 +609,24 @@ unsafe fn on_frame_draw(game: &mut Game, ui: &hudhook::imgui::Ui) {
                 (game.toggle_filter_zombie_special, game.color_zombie_special)
             }
             ModelType::ZombieHunter => (game.toggle_filter_zombie_hunter, game.color_zombie_hunter),
-            ModelType::SurvivorNormal => (
-                game.toggle_filter_survivor_normal,
-                game.color_survivor_nomal,
-            ),
-            ModelType::SurvivorSpecial => (
-                game.toggle_filter_survivor_special,
-                game.color_survivor_special,
-            ),
-            ModelType::SurvivorShopkeeper => (
-                game.toggle_filter_survivor_shopkeeper,
-                game.color_survivor_shopkeeper,
-            ),
+            ModelType::SurvivorNormal => {
+                (
+                    game.toggle_filter_survivor_normal,
+                    game.color_survivor_nomal,
+                )
+            }
+            ModelType::SurvivorSpecial => {
+                (
+                    game.toggle_filter_survivor_special,
+                    game.color_survivor_special,
+                )
+            }
+            ModelType::SurvivorShopkeeper => {
+                (
+                    game.toggle_filter_survivor_shopkeeper,
+                    game.color_survivor_shopkeeper,
+                )
+            }
             ModelType::PlayerHuman => (game.toggle_filter_player_human, game.color_player_human),
             ModelType::PlayerHunter => (game.toggle_filter_player_hunter, game.color_player_hunter),
             ModelType::Other => (game.toggle_filter_other, game.color_other),
@@ -1478,7 +1487,7 @@ unsafe fn get_obj(model_obj_p: *const ModelObject) -> Option<Obj> {
 }
 
 // #[target_feature(enable = "sse")]
-// unsafe  fn get_distance_to_sse(pos1: Vec3<f32>, pos2: Vec3<f32>) -> f32 {
+// unsafe  fn sse_get_distance_to(pos1: Vec3<f32>, pos2: Vec3<f32>) -> f32 {
 //     let a = std::arch::x86_64::_mm_set_ps(0.0, pos1.z, pos1.y, pos1.x);
 //     let b = std::arch::x86_64::_mm_set_ps(0.0, pos2.z, pos2.y, pos2.x);
 //     let diff = std::arch::x86_64::_mm_sub_ps(b, a);
