@@ -1,60 +1,62 @@
 // #![allow(unused)]
 #![allow(static_mut_refs)]
 
-use crate::{CameraFPPDI, ENGINE_DLL_INFO, GameDI, ModelObject, Vec2, Vec3};
 use std::{
     mem::{MaybeUninit, transmute},
     sync::Once,
 };
 
+use crate::{CameraFPPDI, ENGINE_DLL_INFO, GameDI, ModelObject, Vec2, Vec3};
+
 #[inline(always)]
-unsafe fn get_proc_address<S: AsRef<str>>(mod_handle: usize, proc_name: S) -> Option<usize> {
-    let proc_addr = hudhook::windows::Win32::System::LibraryLoader::GetProcAddress(
-        hudhook::windows::Win32::Foundation::HMODULE(mod_handle as isize),
-        hudhook::windows::core::PCSTR::from_raw(format!("{}\0", proc_name.as_ref()).as_ptr()),
+unsafe fn get_proc_address<S: AsRef<str,>,>(mod_handle: usize, proc_name: S,) -> Option<usize,> {
+    let proc_addr = windows::Win32::System::LibraryLoader::GetProcAddress(
+        windows::Win32::Foundation::HMODULE(mod_handle as *mut core::ffi::c_void,),
+        windows::core::PCSTR::from_raw(format!("{}\0", proc_name.as_ref()).as_ptr(),),
     )? as usize;
 
-    if 0 == proc_addr {
+    if 0 == proc_addr
+    {
         return None;
     }
 
-    Some(proc_addr)
+    Some(proc_addr,)
 }
 
 #[inline(always)]
-pub(crate) unsafe fn get_screen_width(game_di_p: *const GameDI) -> i32 {
-    type Prototype = unsafe extern "system" fn(*const GameDI) -> i32;
+pub(crate) unsafe fn get_screen_width(game_di_p: *const GameDI,) -> i32 {
+    type Prototype = unsafe extern "system" fn(*const GameDI,) -> i32;
 
     static mut PROC: usize = 0;
-    static mut PROC_PTR: MaybeUninit<Prototype> = MaybeUninit::uninit();
+    static mut PROC_PTR: MaybeUninit<Prototype,> = MaybeUninit::uninit();
 
     static ONCE: Once = Once::new();
 
     ONCE.call_once(|| {
-        PROC = get_proc_address(ENGINE_DLL_INFO.base, "?GetScreenWidth@IGame@@QEAAHXZ").unwrap();
+        PROC = get_proc_address(ENGINE_DLL_INFO.base, "?GetScreenWidth@IGame@@QEAAHXZ",).unwrap();
 
-        PROC_PTR.write(transmute(PROC));
-    });
+        PROC_PTR.write(transmute(PROC,),);
+    },);
 
-    PROC_PTR.assume_init()(game_di_p)
+    PROC_PTR.assume_init()(game_di_p,)
 }
 
 #[inline(always)]
-pub(crate) unsafe fn get_screen_height(game_di_p: *const GameDI) -> i32 {
-    type Prototype = unsafe extern "system" fn(*const GameDI) -> i32;
+pub(crate) unsafe fn get_screen_height(game_di_p: *const GameDI,) -> i32 {
+    type Prototype = unsafe extern "system" fn(*const GameDI,) -> i32;
 
     static mut PROC: usize = 0;
-    static mut FN: MaybeUninit<Prototype> = MaybeUninit::uninit();
+    static mut FN: MaybeUninit<Prototype,> = MaybeUninit::uninit();
 
     static ONCE: Once = Once::new();
 
     ONCE.call_once(|| {
-        PROC = get_proc_address(ENGINE_DLL_INFO.base, "?GetScreenHeight@IGame@@QEAAHXZ").unwrap();
+        PROC = get_proc_address(ENGINE_DLL_INFO.base, "?GetScreenHeight@IGame@@QEAAHXZ",).unwrap();
 
-        FN.write(transmute(PROC));
-    });
+        FN.write(transmute(PROC,),);
+    },);
 
-    FN.assume_init()(game_di_p)
+    FN.assume_init()(game_di_p,)
 }
 
 // #[inline(always)]
@@ -84,89 +86,74 @@ pub(crate) unsafe fn get_screen_height(game_di_p: *const GameDI) -> i32 {
 // }
 
 #[inline(always)]
-pub(crate) unsafe fn get_distance_to(
-    model_obj_p: *const ModelObject,
-    world_pos: *const Vec3<f32>,
-) -> f32 {
-    type Prototype = unsafe extern "system" fn(*const ModelObject, *const Vec3<f32>) -> f32;
+pub(crate) unsafe fn get_distance_to(model_obj_p: *const ModelObject, world_pos: *const Vec3<f32,>,) -> f32 {
+    type Prototype = unsafe extern "system" fn(*const ModelObject, *const Vec3<f32,>,) -> f32;
 
     static mut PROC: usize = 0;
-    static mut PROC_PTR: MaybeUninit<Prototype> = MaybeUninit::uninit();
+    static mut PROC_PTR: MaybeUninit<Prototype,> = MaybeUninit::uninit();
 
     static ONCE: Once = Once::new();
 
     ONCE.call_once(|| {
-        PROC = get_proc_address(
-            ENGINE_DLL_INFO.base,
-            "?GetDistanceTo@IControlObject@@QEBAMAEBVvec3@@@Z",
-        )
-        .unwrap();
+        PROC = get_proc_address(ENGINE_DLL_INFO.base, "?GetDistanceTo@IControlObject@@QEBAMAEBVvec3@@@Z",).unwrap();
 
-        PROC_PTR.write(transmute(PROC));
-    });
+        PROC_PTR.write(transmute(PROC,),);
+    },);
 
-    return PROC_PTR.assume_init()(model_obj_p, world_pos);
+    return PROC_PTR.assume_init()(model_obj_p, world_pos,);
 }
 
 #[inline(always)]
 pub(crate) unsafe fn raytest_to_target(
     model_obj_p: *const ModelObject,
     target_model_obj_p: *const ModelObject,
-    from: *const Vec3<f32>,
-    to: *const Vec3<f32>,
+    from: *const Vec3<f32,>,
+    to: *const Vec3<f32,>,
     para: u8,
 ) -> i8 {
     type Prototype = unsafe extern "system" fn(
         *const ModelObject,
         *const ModelObject,
-        *const Vec3<f32>,
-        *const Vec3<f32>,
+        *const Vec3<f32,>,
+        *const Vec3<f32,>,
         u8,
     ) -> i8;
 
     static mut PROC: usize = 0;
-    static mut PROC_PTR: MaybeUninit<Prototype> = MaybeUninit::uninit();
+    static mut PROC_PTR: MaybeUninit<Prototype,> = MaybeUninit::uninit();
 
     static ONCE: Once = Once::new();
 
     ONCE.call_once(|| {
-        PROC = get_proc_address(
-            ENGINE_DLL_INFO.base,
-            "?RaytestToTarget@IControlObject@@QEAA_NPEBV1@AEBVvec3@@1E@Z",
-        )
-        .unwrap();
+        PROC = get_proc_address(ENGINE_DLL_INFO.base, "?RaytestToTarget@IControlObject@@QEAA_NPEBV1@AEBVvec3@@1E@Z",)
+            .unwrap();
 
-        PROC_PTR.write(transmute(PROC));
-    });
+        PROC_PTR.write(transmute(PROC,),);
+    },);
 
-    return PROC_PTR.assume_init()(model_obj_p, target_model_obj_p, from, to, para);
+    return PROC_PTR.assume_init()(model_obj_p, target_model_obj_p, from, to, para,);
 }
 
 #[inline(always)]
 pub(crate) unsafe fn get_bone_joint_pos(
     model_obj_p: *const ModelObject,
-    world_pos: *const Vec3<f32>,
+    world_pos: *const Vec3<f32,>,
     index: u8,
 ) -> *const u8 {
-    type Prototype =
-        unsafe extern "system" fn(*const ModelObject, *const Vec3<f32>, u8) -> *const u8;
+    type Prototype = unsafe extern "system" fn(*const ModelObject, *const Vec3<f32,>, u8,) -> *const u8;
 
     static mut PROC: usize = 0;
-    static mut PROC_PTR: MaybeUninit<Prototype> = MaybeUninit::uninit();
+    static mut PROC_PTR: MaybeUninit<Prototype,> = MaybeUninit::uninit();
 
     static ONCE: Once = Once::new();
 
     ONCE.call_once(|| {
-        PROC = get_proc_address(
-            ENGINE_DLL_INFO.base,
-            "?GetBoneJointPos@IModelObject@@QEBA?AVvec3@@E@Z",
-        )
-        .unwrap();
+        PROC = get_proc_address(ENGINE_DLL_INFO.base, "?GetBoneJointPos@IModelObject@@QEBA?AVvec3@@E@Z",).unwrap();
 
-        PROC_PTR.write(transmute(PROC));
-    });
+        PROC_PTR.write(transmute(PROC,),);
+    },);
 
-    PROC_PTR.assume_init()(model_obj_p, world_pos, index)
+    PROC_PTR.assume_init()(model_obj_p, world_pos, index,)
 }
 
 // #[inline(always)]
@@ -202,31 +189,25 @@ pub(crate) unsafe fn get_bone_joint_pos(
 #[inline(always)]
 pub(crate) unsafe fn point_to_screen(
     camera_fpp_di_p: *const CameraFPPDI,
-    screen_pos: *const Vec2<f32>,
-    world_pos: *const Vec3<f32>,
-) -> *const Vec2<f32> {
-    type Prototype = unsafe extern "system" fn(
-        *const CameraFPPDI,
-        *const Vec2<f32>,
-        *const Vec3<f32>,
-    ) -> *const Vec2<f32>;
+    screen_pos: *const Vec2<f32,>,
+    world_pos: *const Vec3<f32,>,
+) -> *const Vec2<f32,> {
+    type Prototype =
+        unsafe extern "system" fn(*const CameraFPPDI, *const Vec2<f32,>, *const Vec3<f32,>,) -> *const Vec2<f32,>;
 
     static mut PROC: usize = 0;
-    static mut PROC_PTR: MaybeUninit<Prototype> = MaybeUninit::uninit();
+    static mut PROC_PTR: MaybeUninit<Prototype,> = MaybeUninit::uninit();
 
     static ONCE: Once = Once::new();
 
     ONCE.call_once(|| {
-        PROC = get_proc_address(
-            ENGINE_DLL_INFO.base,
-            "?PointToScreen@IBaseCamera@@QEAA?BVvec2@@AEBVvec3@@@Z",
-        )
-        .unwrap();
+        PROC =
+            get_proc_address(ENGINE_DLL_INFO.base, "?PointToScreen@IBaseCamera@@QEAA?BVvec2@@AEBVvec3@@@Z",).unwrap();
 
-        PROC_PTR.write(transmute(PROC));
-    });
+        PROC_PTR.write(transmute(PROC,),);
+    },);
 
-    PROC_PTR.assume_init()(camera_fpp_di_p, screen_pos, world_pos)
+    PROC_PTR.assume_init()(camera_fpp_di_p, screen_pos, world_pos,)
 }
 
 // #[inline(always)]
@@ -277,66 +258,54 @@ pub(crate) unsafe fn point_to_screen(
 // }
 
 #[inline(always)]
-pub(crate) unsafe fn get_position(camera_fpp_di_p: *const CameraFPPDI) -> *const Vec3<f32> {
-    type Prototype =
-        unsafe extern "system" fn(*const CameraFPPDI, *const Vec3<f32>) -> *const Vec3<f32>;
+pub(crate) unsafe fn get_position(camera_fpp_di_p: *const CameraFPPDI,) -> *const Vec3<f32,> {
+    type Prototype = unsafe extern "system" fn(*const CameraFPPDI, *const Vec3<f32,>,) -> *const Vec3<f32,>;
 
     static mut PROC: usize = 0;
-    static mut PROC_PTR: MaybeUninit<Prototype> = MaybeUninit::uninit();
+    static mut PROC_PTR: MaybeUninit<Prototype,> = MaybeUninit::uninit();
 
     static ONCE: Once = Once::new();
 
     ONCE.call_once(|| {
-        PROC = get_proc_address(
-            ENGINE_DLL_INFO.base,
-            "?GetPosition@IBaseCamera@@QEBA?BVvec3@@XZ",
-        )
-        .unwrap();
+        PROC = get_proc_address(ENGINE_DLL_INFO.base, "?GetPosition@IBaseCamera@@QEBA?BVvec3@@XZ",).unwrap();
 
-        PROC_PTR.write(transmute(PROC));
-    });
+        PROC_PTR.write(transmute(PROC,),);
+    },);
 
-    let mut pos: Vec3<f32> = Vec3::default();
+    let mut pos: Vec3<f32,> = Vec3::default();
 
-    return PROC_PTR.assume_init()(camera_fpp_di_p as *const CameraFPPDI, &mut pos);
+    return PROC_PTR.assume_init()(camera_fpp_di_p as *const CameraFPPDI, &mut pos,);
 }
 
 #[inline(always)]
-pub(crate) unsafe fn is_in_frustum(model_obj_p: *const ModelObject) -> i8 {
-    type Prototype = unsafe extern "system" fn(*const ModelObject) -> i8;
+pub(crate) unsafe fn is_in_frustum(model_obj_p: *const ModelObject,) -> i8 {
+    type Prototype = unsafe extern "system" fn(*const ModelObject,) -> i8;
 
     static mut PROC: usize = 0;
-    static mut PROC_PTR: MaybeUninit<Prototype> = MaybeUninit::uninit();
+    static mut PROC_PTR: MaybeUninit<Prototype,> = MaybeUninit::uninit();
 
     static ONCE: Once = Once::new();
 
     ONCE.call_once(|| {
-        PROC = get_proc_address(
-            ENGINE_DLL_INFO.base,
-            "?IsInFrustum@IControlObject@@QEBA_NXZ",
-        )
-        .unwrap();
+        PROC = get_proc_address(ENGINE_DLL_INFO.base, "?IsInFrustum@IControlObject@@QEBA_NXZ",).unwrap();
 
-        PROC_PTR.write(transmute(PROC));
-    });
+        PROC_PTR.write(transmute(PROC,),);
+    },);
 
-    return PROC_PTR.assume_init()(model_obj_p);
+    return PROC_PTR.assume_init()(model_obj_p,);
 }
 
 #[inline(always)]
 pub(crate) unsafe fn get_objects_in_frustum(
     camera_fpp_di_p: *const CameraFPPDI,
-    model_obj_p_array_p: *const crate::Array<*const ModelObject>,
+    model_obj_p_array_p: *const crate::Array<*const ModelObject,>,
     para: f32,
 ) -> i8 {
-    type Prototype = unsafe extern "system" fn(
-        *const CameraFPPDI,
-        *const crate::Array<*const ModelObject>,
-        f32,
-    ) -> i8;
+    type Prototype =
+        unsafe extern "system" fn(*const CameraFPPDI, *const crate::Array<*const ModelObject,>, f32,) -> i8;
 
     static mut PROC: usize = 0;
-    static mut PROC_PTR: MaybeUninit<Prototype> = MaybeUninit::uninit();
+    static mut PROC_PTR: MaybeUninit<Prototype,> = MaybeUninit::uninit();
 
     static ONCE: Once = Once::new();
 
@@ -347,8 +316,8 @@ pub(crate) unsafe fn get_objects_in_frustum(
         )
         .unwrap();
 
-        PROC_PTR.write(transmute(PROC));
-    });
+        PROC_PTR.write(transmute(PROC,),);
+    },);
 
-    PROC_PTR.assume_init()(camera_fpp_di_p, model_obj_p_array_p, para)
+    PROC_PTR.assume_init()(camera_fpp_di_p, model_obj_p_array_p, para,)
 }

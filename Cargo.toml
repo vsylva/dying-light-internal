@@ -6,16 +6,23 @@ publish = false
 
 [lib]
 crate-type = ["cdylib"]
-name = "hid"
 
 [dependencies]
-hudhook = { path = "vendor/hudhook", default-features = false, features = [
-  "dx11",
+nany = { git = "https://github.com/vsylva/nany.git" }
+egui = { version = "=0.37.0", default-features = false, features = [
+    "default_fonts",
 ] }
 libmem = { version = "5.0.4", default-features = false }
-
-[build-dependencies]
-forward-dll = "0.1.16"
+windows = { version = "=0.58.0", default-features = false, features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Memory",
+    "Win32_System_SystemInformation",
+    "Win32_System_Threading",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+] }
 
 [profile.dev]
 overflow-checks = false
@@ -23,10 +30,9 @@ overflow-checks = false
 [profile.release]
 codegen-units = 1
 debug = false
-debug-assertions = false
 incremental = false
 lto = "fat"
 opt-level = 3
 overflow-checks = false
-panic = 'abort'
+panic = "abort"
 strip = true

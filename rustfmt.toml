@@ -1,21 +1,48 @@
-style_edition = "2024"
+# ==========================================
+# Rustfmt 终极优化配置 (需 Nightly 工具链)
+# ==========================================
 
+# --- 核心基础 ---
+# 允许使用不稳定选项 (Nightly 必备)
 unstable_features = true
+# 每行的最大宽度，100 是现代显示器的黄金比例
+max_width = 120
+# 缩进使用空格 (Rust 标准)
+hard_tabs = false
+tab_spaces = 4
 
-combine_control_expr = false
+# --- 布局与视觉对齐 ---
+# 自动将简单的 if-else/match/struct 压缩到单行
+use_small_heuristics = "Max"
+# 结构体字段名在差异较小时自动对齐冒号
+struct_field_align_threshold = 20
+# 换行时将运算符（如 &&, +）放在行首，增强逻辑可读性
+binop_separator = "Front"
 
-condense_wildcard_suffixes = true
+# --- 语句块与控制流 ---
+# 自动将 Match 臂转换为并排（如果足够短）
+control_brace_style = "AlwaysNextLine"
+# 自动简化 Match 模式，去除不必要的括号
+combine_control_expr = true
+# 移除不必要的嵌套括号
+remove_nested_parens = true
 
-force_multiline_blocks = true
-
-format_code_in_doc_comments = true
-
-format_macro_matchers = true
-
+# --- 导入管理 (Imports) ---
+# 合并多个导入行，减少头部冗余 (如 use a::{b, c})
 imports_granularity = "Crate"
+# 将导入按 Std -> External -> Local 顺序分组排布
+group_imports = "StdExternalCrate"
+# 导入项按字母顺序排序
+reorder_imports = true
+# 模块定义按字母顺序排序
+reorder_modules = true
 
-newline_style = "Unix"
+# --- 注释与文档 (极致细节) ---
+# 【关键】自动格式化文档注释中的代码块！
+format_code_in_doc_comments = true
+# 自动对超长注释进行换行
+wrap_comments = false
 
-reorder_impl_items = true
-
-struct_lit_single_line = false
+# --- 细节微调 ---
+# 强制在 struct/enum 末尾添加逗号，优化 Git diff 效果
+trailing_comma = "Always"
