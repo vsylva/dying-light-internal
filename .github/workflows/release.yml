@@ -8,7 +8,7 @@ permissions:
   contents: write
 
 env:
-  FILE: hid.dll
+  FILE: dying-light-internal.dll
 
 jobs:
   build-and-release:
